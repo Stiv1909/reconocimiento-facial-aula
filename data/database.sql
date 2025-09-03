@@ -10,6 +10,8 @@ CREATE TABLE Estudiantes (
     id_estudiante INT AUTO_INCREMENT PRIMARY KEY,
     nombres VARCHAR(100) NOT NULL,
     apellidos VARCHAR(100) NOT NULL,
+    grado VARCHAR(5) NOT NULL,
+    estado ENUM('Estudiante', 'Ex-Alumno') DEFAULT 'Estudiante',
     foto_rostro LONGBLOB
 );
 
@@ -24,8 +26,7 @@ CREATE TABLE Docentes (
 
 -- Tabla Equipos
 CREATE TABLE Equipos (
-    id_equipo INT AUTO_INCREMENT PRIMARY KEY,
-    codigo VARCHAR(50) UNIQUE NOT NULL,
+    codigo VARCHAR(50) PRIMARY KEY,
     estado ENUM('disponible', 'ocupado', 'dañado') DEFAULT 'disponible'
 );
 
