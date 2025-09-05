@@ -2,53 +2,79 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
     QFrame, QGraphicsDropShadowEffect, QComboBox, QTableWidget, QTableWidgetItem,
-    QAbstractItemView, QHeaderView, QDialog
+    QAbstractItemView, QHeaderView, QDialog,
+    QMessageBox
 )
 from PyQt6.QtGui import QPixmap, QColor, QImage
-from PyQt6.QtCore import Qt,QTimer
+from PyQt6.QtCore import Qt, QTimer
 import cv2
 import numpy as np
-# Importa tu lógica desde otro archivo
+
+# Importación de funciones desde la lógica de negocio (módulos externos)
 from modules.estudiantes import buscar_estudiantes, actualizar_datos, actualizar_rostro
 
 
+# ==========================================================
+#   CLASE: VentanaCapturaRostro
+#   Función: Permite tomar una foto del rostro del estudiante
+#   - Se abre como un QDialog
+#   - Muestra la cámara en tiempo real
+#   - Permite capturar foto o cancelar la acción
+# ==========================================================
 class VentanaCapturaRostro(QDialog):
     def __init__(self, id_estudiante, parent=None):
         super().__init__(parent)
         self.id_estudiante = id_estudiante
         self.setWindowTitle("Capturar Rostro")
-        self.setGeometry(300, 200, 640, 520)
+        self.resize(1000, 650)
+        self.centrar_ventana()
+        self.init_ui()
 
-        # Layout
-        layout = QVBoxLayout()
-
-        # Label para mostrar la cámara
-        self.lbl_video = QLabel()
-        self.lbl_video.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.lbl_video)
-
-        # Botones
-        botones_layout = QHBoxLayout()
-        self.btn_tomar = QPushButton("📸 Tomar Foto")
-        self.btn_cancelar = QPushButton("❌ Cancelar")
-        botones_layout.addWidget(self.btn_tomar)
-        botones_layout.addWidget(self.btn_cancelar)
-        layout.addLayout(botones_layout)
-
-        self.setLayout(layout)
-
-        # Inicializar cámara
+        # --- Inicialización de cámara ---
         self.cap = cv2.VideoCapture(0)
         self.timer = QTimer()
         self.timer.timeout.connect(self.mostrar_frame)
         self.timer.start(30)
 
-        # Conectar botones
+        # --- Conectar botones ---
         self.btn_tomar.clicked.connect(self.tomar_foto)
         self.btn_cancelar.clicked.connect(self.cancelar)
 
         self.foto_bytes = None
 
+    # ------------------------------------------------------
+    # Centrar ventana en la pantalla
+    # ------------------------------------------------------
+    def centrar_ventana(self):
+        screen = QApplication.primaryScreen().availableGeometry()
+        tamaño = self.frameGeometry()
+        tamaño.moveCenter(screen.center())
+        self.move(tamaño.topLeft())
+
+    # ------------------------------------------------------
+    # Construcción de la interfaz gráfica
+    # ------------------------------------------------------
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        # Área de video (cámara en vivo)
+        self.lbl_video = QLabel()
+        self.lbl_video.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.lbl_video)
+
+        # Botones de acción
+        botones_layout = QHBoxLayout()
+        self.btn_tomar = QPushButton("📸 Tomar Foto")
+        self.btn_cancelar = QPushButton("❌ Cancelar")
+        botones_layout.addWidget(self.btn_tomar)
+        botones_layout.addWidget(self.btn_cancelar)
+
+        layout.addLayout(botones_layout)
+        self.setLayout(layout)
+
+    # ------------------------------------------------------
+    # Mostrar el feed de la cámara en tiempo real
+    # ------------------------------------------------------
     def mostrar_frame(self):
         ret, frame = self.cap.read()
         if ret:
@@ -57,14 +83,15 @@ class VentanaCapturaRostro(QDialog):
             img = QImage(frame_rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
             self.lbl_video.setPixmap(QPixmap.fromImage(img))
 
+    # ------------------------------------------------------
+    # Capturar foto y actualizar rostro en la BD
+    # ------------------------------------------------------
     def tomar_foto(self):
         ret, frame = self.cap.read()
         if ret:
             _, buffer = cv2.imencode(".jpg", frame)
             self.foto_bytes = buffer.tobytes()
 
-            # Guardar en la DB
-            from modules.estudiantes import actualizar_rostro
             if actualizar_rostro(self.id_estudiante, self.foto_bytes):
                 print("✅ Rostro actualizado correctamente")
             else:
@@ -72,79 +99,82 @@ class VentanaCapturaRostro(QDialog):
 
             self.close()
 
+    # ------------------------------------------------------
+    # Cancelar captura y cerrar ventana
+    # ------------------------------------------------------
     def cancelar(self):
         print("⚠ Captura cancelada por el usuario")
         self.close()
 
+    # ------------------------------------------------------
+    # Evento al cerrar la ventana: detener cámara y liberar recursos
+    # ------------------------------------------------------
     def closeEvent(self, event):
         self.timer.stop()
         if self.cap.isOpened():
             self.cap.release()
         super().closeEvent(event)
 
+
+# ==========================================================
+#   CLASE: EditarEstudiantes
+#   Función: Permite buscar, actualizar y gestionar estudiantes
+#   - Muestra estudiantes en tabla
+#   - Permite editar datos (nombre, apellido, grado, estado)
+#   - Permite actualizar el rostro desde la cámara
+# ==========================================================
 class EditarEstudiantes(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Editar Estudiantes - Institución Educativa del Sur")
-        self.setGeometry(200, 200, 1050, 650)
+        self.resize(1050, 650)
+        self.centrar_ventana()
         self.init_ui()
 
+    # ------------------------------------------------------
+    # Centrar ventana en la pantalla
+    # ------------------------------------------------------
+    def centrar_ventana(self):
+        screen = QApplication.primaryScreen().availableGeometry()
+        tamaño = self.frameGeometry()
+        tamaño.moveCenter(screen.center())
+        self.move(tamaño.topLeft())
+
+    # ------------------------------------------------------
+    # Construcción de la interfaz gráfica
+    # ------------------------------------------------------
     def init_ui(self):
+        # Estilos CSS globales
         self.setStyleSheet("""
-            QWidget {
-                background-color: white;
-                color: black;
-                font-family: Arial;
-                font-size: 14px;
-            }
-            QFrame {
-                border: 2px solid #ddd;
-                border-radius: 12px;
-                background-color: white;
-            }
-            QPushButton {
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-weight: bold;
-                color: white;
-            }
+            QWidget { background-color: white; color: black; font-family: Arial; font-size: 14px; }
+            QFrame { border: 2px solid #ddd; border-radius: 12px; background-color: white; }
+            QPushButton { border-radius: 6px; padding: 6px 12px; font-weight: bold; color: white; }
             QPushButton#btnMenu { background-color: #C62828; }
             QPushButton#btnInfo { background-color: #1565C0; }
             QPushButton#btnBuscar { background-color: #1565C0; font-size: 18px; }
             QPushButton#btnActualizar { background-color: #1565C0; }
             QPushButton#btnRostro { background-color: #C62828; }
             QPushButton:hover { opacity: 0.85; }
-            QLineEdit, QComboBox {
-                border: 1px solid #1565C0;
-                border-radius: 5px;
-                padding: 4px;
-                background-color: white;
-                color: black;
-            }
-            QTableWidget {
-                border: 1px solid #ccc;
-                gridline-color: #ccc;
-                background-color: white;
-            }
-            QHeaderView::section {
-                background-color: #1565C0;
-                color: white;
-                font-weight: bold;
-                padding: 4px;
-            }
+            QLineEdit, QComboBox { border: 1px solid #1565C0; border-radius: 5px; padding: 4px; background-color: white; color: black; }
+            QTableWidget { border: 1px solid #ccc; gridline-color: #ccc; background-color: white; }
+            QHeaderView::section { background-color: #1565C0; color: white; font-weight: bold; padding: 4px; }
         """)
 
+        # --- Contenedor principal con sombra ---
         frame = QFrame()
         shadow_frame = QGraphicsDropShadowEffect()
         shadow_frame.setBlurRadius(15)
         shadow_frame.setColor(QColor(0, 0, 0, 80))
         frame.setGraphicsEffect(shadow_frame)
 
-        # --- Fila superior ---
+        # ------------------------------------------------------
+        # Fila superior: logo + botones de menú e información
+        # ------------------------------------------------------
         logo = QLabel()
-        pixmap_logo = QPixmap(r"C:\Users\steven\Documents\2.GIT-GRADO\reconocimiento-facial-aula\src\logo_institucion.jpeg")
+        pixmap_logo = QPixmap("src/logo_institucion.jpeg")
         if not pixmap_logo.isNull():
-            pixmap_logo = pixmap_logo.scaled(70, 70, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            pixmap_logo = pixmap_logo.scaled(70, 70, Qt.AspectRatioMode.KeepAspectRatio,
+                                             Qt.TransformationMode.SmoothTransformation)
             logo.setPixmap(pixmap_logo)
         else:
             logo.setText("Logo no encontrado")
@@ -152,6 +182,8 @@ class EditarEstudiantes(QWidget):
 
         btn_menu = QPushButton("MENÚ")
         btn_menu.setObjectName("btnMenu")
+        btn_menu.clicked.connect(self.volver_menu)  # Acción: regresar al menú principal
+
         btn_info = QPushButton("MÁS INFORMACIÓN")
         btn_info.setObjectName("btnInfo")
 
@@ -161,12 +193,16 @@ class EditarEstudiantes(QWidget):
         top_layout.addWidget(btn_menu)
         top_layout.addWidget(btn_info)
 
-        # --- Título ---
+        # ------------------------------------------------------
+        # Título de la ventana
+        # ------------------------------------------------------
         titulo = QLabel("EDITAR ESTUDIANTES")
         titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         titulo.setStyleSheet("font-size: 22px; font-weight: bold; color: #C62828; margin: 5px;")
 
-        # --- Filtros ---
+        # ------------------------------------------------------
+        # Filtros de búsqueda
+        # ------------------------------------------------------
         lbl_nombre = QLabel("Estudiante:")
         self.txt_nombre = QLineEdit()
         self.txt_nombre.setPlaceholderText("Nombre completo")
@@ -203,29 +239,37 @@ class EditarEstudiantes(QWidget):
         filtros_layout.addSpacing(10)
         filtros_layout.addWidget(btn_buscar)
 
-        # --- Barra "Estudiantes" ---
+        # ------------------------------------------------------
+        # Barra título de tabla
+        # ------------------------------------------------------
         barra_estudiantes = QLabel("ESTUDIANTES")
         barra_estudiantes.setStyleSheet("background-color: #1565C0; color: white; font-weight: bold; padding: 6px;")
         barra_estudiantes.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # --- Tabla ---
+        # ------------------------------------------------------
+        # Tabla de estudiantes
+        # ------------------------------------------------------
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(6)
-        self.tabla.setHorizontalHeaderLabels(["Nombres", "Apellidos", "Grado", "Estado", "Actualizar Datos", "Actualizar Rostro"])
+        self.tabla.setHorizontalHeaderLabels([
+            "Nombres", "Apellidos", "Grado", "Estado", "Actualizar Datos", "Actualizar Rostro"
+        ])
         self.tabla.setEditTriggers(QAbstractItemView.EditTrigger.AllEditTriggers)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.tabla.setRowCount(0)  # Vacía al inicio
+        self.tabla.setRowCount(0)
 
-        # Ajuste proporcional de columnas
+        # Configuración de columnas
         header = self.tabla.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Nombres
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # Apellidos
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # Grado
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # Estado
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)  # Botón Actualizar Datos
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)  # Botón Actualizar Rostro
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
 
-        # --- Layout interno ---
+        # ------------------------------------------------------
+        # Layout interno
+        # ------------------------------------------------------
         frame_layout = QVBoxLayout()
         frame_layout.addLayout(top_layout)
         frame_layout.addWidget(titulo)
@@ -234,17 +278,20 @@ class EditarEstudiantes(QWidget):
         frame_layout.addWidget(self.tabla)
         frame.setLayout(frame_layout)
 
-        # --- Layout principal ---
+        # Layout principal
         main_layout = QVBoxLayout()
         main_layout.addWidget(frame)
         self.setLayout(main_layout)
 
+    # ------------------------------------------------------
+    # Buscar estudiantes y llenar tabla con resultados
+    # ------------------------------------------------------
     def buscar_estudiantes_ui(self):
         nombre = self.txt_nombre.text().strip()
         grado = self.cmb_grado.currentText()
         estado = self.cmb_estado.currentText()
 
-        resultados = buscar_estudiantes(nombre, grado, estado)  # Llama a tu backend
+        resultados = buscar_estudiantes(nombre, grado, estado)
         self.tabla.setRowCount(len(resultados))
 
         for fila, est in enumerate(resultados):
@@ -254,30 +301,33 @@ class EditarEstudiantes(QWidget):
             grado = est["grado"]
             estado = est["estado"]
 
+            # Columnas texto
             self.tabla.setItem(fila, 0, QTableWidgetItem(nombre))
             self.tabla.setItem(fila, 1, QTableWidgetItem(apellido))
 
-            # 🔥 ComboBox para Grado
+            # ComboBox Grado
             combo_grado = QComboBox()
-            combo_grado.addItems(["6-1", "6-2", "6-3", "6-4",
-                                "7-1", "7-2", "7-3", "7-4",
-                                "8-1", "8-2", "8-3",
-                                "9-1", "9-2", "9-3",
-                                "10-1", "10-2", "10-3",
-                                "11-1", "11-2", "11-3"])
-            combo_grado.setMinimumWidth(70)   # 👈 ancho mínimo dentro de la celda
+            combo_grado.addItems([
+                "6-1", "6-2", "6-3", "6-4",
+                "7-1", "7-2", "7-3", "7-4",
+                "8-1", "8-2", "8-3",
+                "9-1", "9-2", "9-3",
+                "10-1", "10-2", "10-3",
+                "11-1", "11-2", "11-3"
+            ])
+            combo_grado.setMinimumWidth(70)
             if grado in [combo_grado.itemText(i) for i in range(combo_grado.count())]:
                 combo_grado.setCurrentText(grado)
             self.tabla.setCellWidget(fila, 2, combo_grado)
 
-            # 🔥 ComboBox para Estado
+            # ComboBox Estado
             combo_estado = QComboBox()
             combo_estado.addItems(["Estudiante", "Ex-Alumno"])
             if estado in [combo_estado.itemText(i) for i in range(combo_estado.count())]:
                 combo_estado.setCurrentText(estado)
             self.tabla.setCellWidget(fila, 3, combo_estado)
 
-            # Botón Actualizar
+            # Botones acciones
             btn_actualizar = QPushButton("Actualizar Datos")
             btn_actualizar.setObjectName("btnActualizar")
             btn_actualizar.clicked.connect(lambda _, f=fila, i=id_est: self.actualizar_datos_ui(f, i))
@@ -289,22 +339,55 @@ class EditarEstudiantes(QWidget):
             self.tabla.setCellWidget(fila, 4, btn_actualizar)
             self.tabla.setCellWidget(fila, 5, btn_rostro)
 
+    # ------------------------------------------------------
+    # Actualizar datos de un estudiante en la BD
+    # ------------------------------------------------------
+    from PyQt6.QtWidgets import QMessageBox
 
+    # ------------------------------------------------------
+    # Actualizar datos de un estudiante en la BD
+    # ------------------------------------------------------
     def actualizar_datos_ui(self, fila, id_estudiante):
-        nombre = self.tabla.item(fila, 0).text()
-        apellido = self.tabla.item(fila, 1).text()
+        nombre = self.tabla.item(fila, 0).text().strip() if self.tabla.item(fila, 0) else ""
+        apellido = self.tabla.item(fila, 1).text().strip() if self.tabla.item(fila, 1) else ""
         grado = self.tabla.cellWidget(fila, 2).currentText()
         estado = self.tabla.cellWidget(fila, 3).currentText()
+
+        # 🚨 Validación de campos vacíos
+        if not nombre or not apellido:
+            QMessageBox.warning(self, "Campos obligatorios",
+                                "⚠ Los campos Nombres y Apellidos no pueden estar vacíos.")
+            return
+
         ok = actualizar_datos(id_estudiante, nombre, apellido, grado, estado)
         if ok:
-            # Refrescar búsqueda con los filtros actuales
+            QMessageBox.information(self, "Actualización exitosa",
+                                    f"✅ Datos de {nombre} {apellido} actualizados correctamente.")
             self.buscar_estudiantes_ui()
+        else:
+            QMessageBox.critical(self, "Error",
+                                 "❌ No se pudieron actualizar los datos. Intente nuevamente.")
 
+    # ------------------------------------------------------
+    # Abrir ventana para actualizar rostro del estudiante
+    # ------------------------------------------------------
     def actualizar_rostro_ui(self, id_estudiante):
         ventana = VentanaCapturaRostro(id_estudiante, self)
         ventana.exec()
 
+    # ------------------------------------------------------
+    # Volver al menú principal
+    # ------------------------------------------------------
+    def volver_menu(self):
+        from menu import InterfazAdministrativa
+        self.ventana_menu = InterfazAdministrativa()
+        self.ventana_menu.show()
+        self.close()
 
+
+# ==========================================================
+#   EJECUCIÓN DIRECTA
+# ==========================================================
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     ventana = EditarEstudiantes()

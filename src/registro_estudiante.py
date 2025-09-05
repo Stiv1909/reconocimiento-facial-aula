@@ -8,30 +8,54 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QImage, QPixmap, QColor
 from PyQt6.QtCore import Qt, QTimer
 
-from modules.estudiantes import registrar_estudiante
+# Importar función del backend para guardar en la BD
+from modules.estudiantes import registrar_estudiante  
 
 
+# ==========================================================
+#   CLASE: RegistroEstudiantes
+#   Función: Permite registrar un estudiante en la BD
+#            - Captura foto desde cámara
+#            - Guarda nombre, apellido, grado y foto
+# ==========================================================
 class RegistroEstudiantes(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Registro de Estudiantes - Institución Educativa del Sur")
-        self.setGeometry(200, 200, 900, 600)
+        self.resize(900, 600)
+        self.centrar_ventana()   # 🔹 Centramos al iniciar
 
-        # Estado de cámara
+        # --- Estado de cámara ---
         self.camara_activa = True
         self.foto_capturada = None
 
-        # Clasificador de rostros
-        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        # --- Clasificador de rostros (opcional para mejorar validación) ---
+        self.face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
 
-        # Cámara
+        # --- Cámara ---
         self.cap = cv2.VideoCapture(0)
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
-        self.timer.start(30)
+        self.timer.start(30)  # Refrescar cada 30ms
 
         self.init_ui()
 
+    # ------------------------------------------------------
+    # Método: centrar_ventana
+    # Descripción: Centra la ventana en la pantalla
+    # ------------------------------------------------------
+    def centrar_ventana(self):
+        pantalla = QApplication.primaryScreen().availableGeometry()
+        geo = self.frameGeometry()
+        geo.moveCenter(pantalla.center())
+        self.move(geo.topLeft())
+
+    # ------------------------------------------------------
+    # Método: init_ui
+    # Descripción: Construye la interfaz gráfica
+    # ------------------------------------------------------
     def init_ui(self):
         self.setStyleSheet("""
     QWidget {
@@ -51,21 +75,11 @@ class RegistroEstudiantes(QWidget):
         font-weight: bold;
         color: white;
     }
-    QPushButton#btnMenu {
-        background-color: #C62828;
-    }
-    QPushButton#btnInfo {
-        background-color: #1565C0;
-    }
-    QPushButton#btnCapturar {
-        background-color: #C62828;
-    }
-    QPushButton#btnAgregar {
-        background-color: #1565C0;
-    }
-    QPushButton:hover {
-        opacity: 0.85;
-    }
+    QPushButton#btnMenu { background-color: #C62828; }
+    QPushButton#btnInfo { background-color: #1565C0; }
+    QPushButton#btnCapturar { background-color: #C62828; }
+    QPushButton#btnAgregar { background-color: #1565C0; }
+    QPushButton:hover { opacity: 0.85; }
     QLineEdit {
         border: 1px solid #1565C0;
         border-radius: 5px;
@@ -74,7 +88,6 @@ class RegistroEstudiantes(QWidget):
         background-color: white;
         color: black;
     }
-    /* ComboBox principal */
     QComboBox {
         border: 1px solid #1565C0;
         border-radius: 5px;
@@ -84,33 +97,6 @@ class RegistroEstudiantes(QWidget):
         background-color: white;
         color: black;
     }
-    QComboBox:hover {
-        border: 1px solid #0D47A1;
-    }
-    QComboBox:focus {
-        border: 2px solid #0D47A1;
-    }
-    QComboBox::drop-down {
-        subcontrol-origin: padding;
-        subcontrol-position: top right;
-        width: 30px;
-        border-left: 1px solid #1565C0;
-        background-color: #f0f0f0;
-        border-top-right-radius: 5px;
-        border-bottom-right-radius: 5px;
-    }
-    QComboBox::down-arrow {
-        image: none;
-        border: none;
-        width: 0;
-        height: 0;
-        margin-right: 8px;
-        margin-top: 6px;
-        border-left: 7px solid transparent;
-        border-right: 7px solid transparent;
-        border-top: 7px solid #1565C0;
-    }
-    /* Lista desplegable */
     QComboBox QAbstractItemView {
         border: 1px solid #1565C0;
         border-radius: 5px;
@@ -120,28 +106,19 @@ class RegistroEstudiantes(QWidget):
         font-size: 15px;
         outline: 0;
     }
-    QComboBox QAbstractItemView::item {
-        padding: 6px 10px;
-    }
-    QComboBox QAbstractItemView::item:hover {
-        background-color: #E3F2FD;
-        color: black;
-    }
-    QLabel {
-        font-weight: bold;
-    }
+    QLabel { font-weight: bold; }
 """)
 
-
+        # --- Contenedor principal ---
         frame = QFrame()
         shadow_frame = QGraphicsDropShadowEffect()
         shadow_frame.setBlurRadius(15)
         shadow_frame.setColor(QColor(0, 0, 0, 80))
         frame.setGraphicsEffect(shadow_frame)
 
-        # Fila superior
+        # --- Encabezado superior ---
         logo = QLabel()
-        pixmap_logo = QPixmap(r"C:\Users\steven\Documents\2.GIT-GRADO\reconocimiento-facial-aula\src\logo_institucion.jpeg")
+        pixmap_logo = QPixmap("src/logo_institucion.jpeg")
         if not pixmap_logo.isNull():
             pixmap_logo = pixmap_logo.scaled(70, 70, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             logo.setPixmap(pixmap_logo)
@@ -151,6 +128,8 @@ class RegistroEstudiantes(QWidget):
 
         btn_menu = QPushButton("MENÚ")
         btn_menu.setObjectName("btnMenu")
+        btn_menu.clicked.connect(self.volver_menu)  # 🔹 Volver al menú
+
         btn_info = QPushButton("MÁS INFORMACIÓN")
         btn_info.setObjectName("btnInfo")
 
@@ -160,16 +139,18 @@ class RegistroEstudiantes(QWidget):
         top_layout.addWidget(btn_menu)
         top_layout.addWidget(btn_info)
 
-        # Título
+        # --- Título ---
         titulo = QLabel("Registro de Estudiantes")
         titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        titulo.setStyleSheet("font-size: 22px; font-weight: bold; color: #C62828; margin-top: 5px; margin-bottom: 10px;")
+        titulo.setStyleSheet("font-size: 22px; font-weight: bold; color: #C62828; margin: 10px;")
 
-        # Campos
+        # --- Campos del formulario ---
         lbl_nombre = QLabel("Nombre:")
         self.txt_nombre = QLineEdit()
+
         lbl_apellido = QLabel("Apellido:")
         self.txt_apellido = QLineEdit()
+
         lbl_grado = QLabel("Grado:")
         self.cmb_grado = QComboBox()
         self.cmb_grado.addItems([
@@ -193,8 +174,8 @@ class RegistroEstudiantes(QWidget):
         form_layout.addWidget(self.cmb_grado)
         form_layout.addStretch()
 
-        # Área de cámara
-        self.lbl_camara = QLabel("Visualización de lo que observa la cámara")
+        # --- Área de cámara ---
+        self.lbl_camara = QLabel("Visualización de la cámara")
         self.lbl_camara.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_camara.setStyleSheet("""
             border: 2px dashed #1565C0;
@@ -203,7 +184,7 @@ class RegistroEstudiantes(QWidget):
         """)
         self.lbl_camara.setFixedHeight(320)
 
-        # Botones
+        # --- Botones inferiores ---
         btn_capturar = QPushButton("📸 Capturar Registro")
         btn_capturar.setObjectName("btnCapturar")
         btn_capturar.clicked.connect(self.toggle_captura)
@@ -219,7 +200,7 @@ class RegistroEstudiantes(QWidget):
         bottom_layout.addWidget(btn_agregar)
         bottom_layout.addStretch()
 
-        # Layouts
+        # --- Layouts principales ---
         frame_layout = QVBoxLayout()
         frame_layout.addLayout(top_layout)
         frame_layout.addWidget(titulo)
@@ -232,6 +213,10 @@ class RegistroEstudiantes(QWidget):
         main_layout.addWidget(frame)
         self.setLayout(main_layout)
 
+    # ------------------------------------------------------
+    # Método: update_frame
+    # Descripción: Actualiza el video de la cámara en el QLabel
+    # ------------------------------------------------------
     def update_frame(self):
         if self.camara_activa:
             ret, frame = self.cap.read()
@@ -242,25 +227,41 @@ class RegistroEstudiantes(QWidget):
                 qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
                 self.lbl_camara.setPixmap(QPixmap.fromImage(qt_image))
 
+    # ------------------------------------------------------
+    # Método: toggle_captura
+    # Descripción: Captura una foto y pausa la cámara,
+    #              o reactiva la cámara en vivo
+    # ------------------------------------------------------
     def toggle_captura(self):
         if self.camara_activa:
             ret, frame = self.cap.read()
             if ret:
+                # Guardar foto capturada
                 self.foto_capturada = frame.copy()
+
+                # Mostrar la foto en el QLabel
                 rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 h, w, ch = rgb_image.shape
                 bytes_per_line = ch * w
                 qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
                 self.lbl_camara.setPixmap(QPixmap.fromImage(qt_image))
+
+                # Desactivar cámara en vivo
                 self.camara_activa = False
         else:
+            # Reactivar cámara en vivo
             self.camara_activa = True
 
+    # ------------------------------------------------------
+    # Método: agregar_registro
+    # Descripción: Valida y guarda estudiante en la BD
+    # ------------------------------------------------------
     def agregar_registro(self):
         nombre = self.txt_nombre.text().strip()
         apellido = self.txt_apellido.text().strip()
         grado = self.cmb_grado.currentText()
 
+        # Validaciones
         if not nombre or not apellido or not grado:
             QMessageBox.warning(self, "Campos vacíos", "⚠ Debes ingresar todos los campos.")
             return
@@ -273,10 +274,12 @@ class RegistroEstudiantes(QWidget):
         ok, buffer = cv2.imencode(".jpg", self.foto_capturada)
         foto_bytes = buffer.tobytes() if ok else None
 
+        # Guardar en la base de datos
         exito = registrar_estudiante(nombre, apellido, grado, foto_bytes)
 
         if exito:
             QMessageBox.information(self, "Éxito", f"✅ Estudiante {nombre} {apellido} registrado correctamente")
+            # Resetear formulario
             self.txt_nombre.clear()
             self.txt_apellido.clear()
             self.cmb_grado.setCurrentIndex(0)
@@ -285,10 +288,27 @@ class RegistroEstudiantes(QWidget):
         else:
             QMessageBox.critical(self, "Error", "❌ No se pudo registrar el estudiante en la base de datos")
 
+    # ------------------------------------------------------
+    # Método: volver_menu
+    # Descripción: Regresa a la ventana principal (menú)
+    # ------------------------------------------------------
+    def volver_menu(self):
+        from menu import InterfazAdministrativa
+        self.ventana_menu = InterfazAdministrativa()
+        self.ventana_menu.show()
+        self.close()
+
+    # ------------------------------------------------------
+    # Método: closeEvent
+    # Descripción: Libera la cámara al cerrar la ventana
+    # ------------------------------------------------------
     def closeEvent(self, event):
         self.cap.release()
 
 
+# ==========================================================
+#   EJECUCIÓN DIRECTA
+# ==========================================================
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     ventana = RegistroEstudiantes()
