@@ -1,41 +1,28 @@
 from modules.conexion import crear_conexion, cerrar_conexion
 
-
 # ==========================================================
 #   FUNCIÓN: registrar_docente
 #   Descripción:
 #       - Inserta un nuevo docente en la tabla "docentes"
-#       - Guarda nombres, apellidos y la foto en formato binario
-#   Parámetros:
-#       - nombre (str): nombres del docente
-#       - apellido (str): apellidos del docente
-#       - foto_bytes (bytes): foto capturada en formato binario
-#   Retorna:
-#       - True  -> si el registro fue exitoso
-#       - False -> si ocurrió un error
+#       - Guarda cédula, nombres, apellidos, celular, si es admin y la foto
 # ==========================================================
-def registrar_docente(nombre, apellido, foto_bytes):
+def registrar_docente(cedula, nombre, apellido, celular, es_admin, foto_bytes):
     try:
-        # Conectar a la base de datos
         conexion = crear_conexion()
         cursor = conexion.cursor()
 
-        # Consulta SQL para insertar datos
         sql = """
-            INSERT INTO docentes (nombres, apellidos, foto_rostro)
-            VALUES (%s, %s, %s)
+            INSERT INTO docentes (cedula, nombres, apellidos, celular, es_admin, foto_rostro)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """
-        cursor.execute(sql, (nombre, apellido, foto_bytes))
-
-        # Guardar cambios en la BD
+        cursor.execute(sql, (cedula, nombre, apellido, celular, es_admin, foto_bytes))
         conexion.commit()
 
-        # Cerrar recursos
         cursor.close()
-        cerrar_conexion(conexion)   # ✅ Usamos nuestra función de cierre
-
+        cerrar_conexion(conexion)
+        print(f"✅ Docente {nombre} {apellido} registrado con cédula {cedula}")
         return True
+
     except Exception as e:
         print("❌ Error al registrar docente:", e)
         return False
-

@@ -3,7 +3,7 @@ import cv2
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
     QVBoxLayout, QHBoxLayout, QFrame, QGraphicsDropShadowEffect,
-    QMessageBox
+    QMessageBox, QComboBox
 )
 from PyQt6.QtGui import QImage, QPixmap, QColor
 from PyQt6.QtCore import Qt, QTimer
@@ -14,51 +14,38 @@ from modules.docentes import registrar_docente
 
 # ==========================================================
 #   CLASE: RegistroDocente
-#   Función: Permite registrar un docente en la BD
-#            - Captura foto desde cámara
-#            - Detecta rostro y lo guarda
-#            - Almacena nombre, apellido y foto en BD
 # ==========================================================
 class RegistroDocente(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Registro Docente - Institución Educativa del Sur")
         self.resize(900, 600)
-        self.centrar_ventana()   # 🔹 Centramos ventana al iniciar
+        self.centrar_ventana()
 
-        # --- Estado de cámara ---
-        self.camara_activa = True      # Controla si la cámara está activa
-        self.foto_capturada = None     # Guardará la foto tomada
+        # Estado cámara
+        self.camara_activa = True
+        self.foto_capturada = None
 
-        # --- Clasificador de rostros ---
+        # Clasificador de rostros
         self.face_cascade = cv2.CascadeClassifier(
             cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         )
 
-        # --- Variables de cámara ---
-        self.cap = cv2.VideoCapture(0)     # Abrir cámara
-        self.timer = QTimer()              # Timer para refrescar la cámara
+        # Cámara
+        self.cap = cv2.VideoCapture(0)
+        self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
-        self.timer.start(30)               # Cada 30ms refresca la vista
+        self.timer.start(30)
 
         self.init_ui()
 
-    # ------------------------------------------------------
-    # Método: centrar_ventana
-    # Descripción: Posiciona la ventana en el centro de pantalla
-    # ------------------------------------------------------
     def centrar_ventana(self):
         pantalla = QApplication.primaryScreen().availableGeometry()
         geo = self.frameGeometry()
         geo.moveCenter(pantalla.center())
         self.move(geo.topLeft())
 
-    # ------------------------------------------------------
-    # Método: init_ui
-    # Descripción: Construye toda la interfaz gráfica
-    # ------------------------------------------------------
     def init_ui(self):
-        # --- Estilos globales (CSS) ---
         self.setStyleSheet("""
             QWidget {
                 background-color: white;
@@ -92,22 +79,18 @@ class RegistroDocente(QWidget):
             QLabel { font-weight: bold; }
         """)
 
-        # --- Contenedor principal con sombra ---
         frame = QFrame()
         shadow_frame = QGraphicsDropShadowEffect()
         shadow_frame.setBlurRadius(15)
         shadow_frame.setColor(QColor(0, 0, 0, 80))
         frame.setGraphicsEffect(shadow_frame)
 
-        # --- Encabezado superior (logo + botones) ---
+        # Encabezado
         logo = QLabel()
         pixmap_logo = QPixmap("src/logo_institucion.jpeg")
         if not pixmap_logo.isNull():
-            pixmap_logo = pixmap_logo.scaled(
-                70, 70,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            )
+            pixmap_logo = pixmap_logo.scaled(70, 70, Qt.AspectRatioMode.KeepAspectRatio,
+                                             Qt.TransformationMode.SmoothTransformation)
             logo.setPixmap(pixmap_logo)
         else:
             logo.setText("Logo no encontrado")
@@ -115,7 +98,7 @@ class RegistroDocente(QWidget):
 
         btn_menu = QPushButton("MENÚ")
         btn_menu.setObjectName("btnMenu")
-        btn_menu.clicked.connect(self.volver_menu)  # 🔹 Volver al menú principal
+        btn_menu.clicked.connect(self.volver_menu)
 
         btn_info = QPushButton("MÁS INFORMACIÓN")
         btn_info.setObjectName("btnInfo")
@@ -126,28 +109,40 @@ class RegistroDocente(QWidget):
         top_layout.addWidget(btn_menu)
         top_layout.addWidget(btn_info)
 
-        # --- Título principal ---
+        # Título
         titulo = QLabel("Registro Docente")
         titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         titulo.setStyleSheet("font-size: 22px; font-weight: bold; color: #C62828; margin: 10px;")
 
-        # --- Formulario de datos ---
-        lbl_nombre = QLabel("Nombre:")
+        # Formulario
+        self.txt_cedula = QLineEdit()
+        self.txt_cedula.setPlaceholderText("Cédula")
+
         self.txt_nombre = QLineEdit()
+        self.txt_nombre.setPlaceholderText("Nombres")
 
-        lbl_apellido = QLabel("Apellido:")
         self.txt_apellido = QLineEdit()
+        self.txt_apellido.setPlaceholderText("Apellidos")
 
-        form_layout = QHBoxLayout()
-        form_layout.addStretch()
-        form_layout.addWidget(lbl_nombre)
+        self.txt_celular = QLineEdit()
+        self.txt_celular.setPlaceholderText("Celular")
+
+        self.cmb_admin = QComboBox()
+        self.cmb_admin.addItems(["No", "Sí"])  # 0 = No admin, 1 = Admin
+
+        form_layout = QVBoxLayout()
+        form_layout.addWidget(QLabel("Cédula:"))
+        form_layout.addWidget(self.txt_cedula)
+        form_layout.addWidget(QLabel("Nombres:"))
         form_layout.addWidget(self.txt_nombre)
-        form_layout.addSpacing(20)
-        form_layout.addWidget(lbl_apellido)
+        form_layout.addWidget(QLabel("Apellidos:"))
         form_layout.addWidget(self.txt_apellido)
-        form_layout.addStretch()
+        form_layout.addWidget(QLabel("Celular:"))
+        form_layout.addWidget(self.txt_celular)
+        form_layout.addWidget(QLabel("¿Es administrador?"))
+        form_layout.addWidget(self.cmb_admin)
 
-        # --- Cámara (vista previa) ---
+        # Cámara
         self.lbl_camara = QLabel("Visualización de la cámara")
         self.lbl_camara.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_camara.setStyleSheet("""
@@ -157,7 +152,7 @@ class RegistroDocente(QWidget):
         """)
         self.lbl_camara.setFixedHeight(320)
 
-        # --- Botones inferiores ---
+        # Botones
         btn_capturar = QPushButton("📸 Capturar Rostro")
         btn_capturar.setObjectName("btnCapturar")
         btn_capturar.clicked.connect(self.toggle_captura)
@@ -173,7 +168,6 @@ class RegistroDocente(QWidget):
         bottom_layout.addWidget(btn_agregar)
         bottom_layout.addStretch()
 
-        # --- Layout final ---
         frame_layout = QVBoxLayout()
         frame_layout.addLayout(top_layout)
         frame_layout.addWidget(titulo)
@@ -186,10 +180,6 @@ class RegistroDocente(QWidget):
         main_layout.addWidget(frame)
         self.setLayout(main_layout)
 
-    # ------------------------------------------------------
-    # Método: update_frame
-    # Descripción: Actualiza la cámara en vivo en el QLabel
-    # ------------------------------------------------------
     def update_frame(self):
         if self.camara_activa:
             ret, frame = self.cap.read()
@@ -197,94 +187,70 @@ class RegistroDocente(QWidget):
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
                 for (x, y, w, h) in faces:
-                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
 
-                # Convertir imagen OpenCV → QImage
                 rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 h, w, ch = rgb_image.shape
                 bytes_per_line = ch * w
                 qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
                 self.lbl_camara.setPixmap(QPixmap.fromImage(qt_image))
 
-    # ------------------------------------------------------
-    # Método: toggle_captura
-    # Descripción: Captura una foto o reactiva la cámara
-    # ------------------------------------------------------
     def toggle_captura(self):
         if self.camara_activa:
             ret, frame = self.cap.read()
             if ret:
-                # Guardamos la foto
                 self.foto_capturada = frame.copy()
-
-                # Mostramos foto en el QLabel
                 rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 h, w, ch = rgb_image.shape
                 bytes_per_line = ch * w
                 qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
                 self.lbl_camara.setPixmap(QPixmap.fromImage(qt_image))
-
-                # Pausamos cámara
                 self.camara_activa = False
         else:
-            # Reactivar cámara
             self.camara_activa = True
 
-    # ------------------------------------------------------
-    # Método: agregar_registro
-    # Descripción: Guarda datos + foto en la base de datos
-    # ------------------------------------------------------
     def agregar_registro(self):
+        cedula = self.txt_cedula.text().strip()
         nombre = self.txt_nombre.text().strip()
         apellido = self.txt_apellido.text().strip()
+        celular = self.txt_celular.text().strip()
+        es_admin = 1 if self.cmb_admin.currentText() == "Sí" else 0
 
-        # Validaciones
-        if not nombre or not apellido:
-            QMessageBox.warning(self, "Campos vacíos", "⚠ Debes ingresar nombre y apellido.")
+        if not cedula or not nombre or not apellido or not celular:
+            QMessageBox.warning(self, "Campos vacíos", "⚠ Todos los campos son obligatorios.")
             return
 
         if self.foto_capturada is None:
             QMessageBox.warning(self, "Sin foto", "⚠ Debes capturar una foto antes de registrar.")
             return
 
-        # Convertir foto a bytes para BD
         ok, buffer = cv2.imencode(".jpg", self.foto_capturada)
         foto_bytes = buffer.tobytes() if ok else None
 
-        # Guardar en la base de datos
-        exito = registrar_docente(nombre, apellido, foto_bytes)
+        exito = registrar_docente(cedula, nombre, apellido, celular, es_admin, foto_bytes)
 
         if exito:
             QMessageBox.information(self, "Éxito", f"✅ Docente {nombre} {apellido} registrado correctamente")
-            # Resetear formulario
+            self.txt_cedula.clear()
             self.txt_nombre.clear()
             self.txt_apellido.clear()
+            self.txt_celular.clear()
+            self.cmb_admin.setCurrentIndex(0)
             self.foto_capturada = None
             self.camara_activa = True
         else:
             QMessageBox.critical(self, "Error", "❌ No se pudo registrar el docente en la base de datos")
 
-    # ------------------------------------------------------
-    # Método: volver_menu
-    # Descripción: Regresa a la ventana principal (menú)
-    # ------------------------------------------------------
     def volver_menu(self):
-        from menu import InterfazAdministrativa  # Lazy import para evitar circular import
+        from menu import InterfazAdministrativa
         self.ventana_menu = InterfazAdministrativa()
         self.ventana_menu.show()
         self.close()
 
-    # ------------------------------------------------------
-    # Método: closeEvent
-    # Descripción: Libera la cámara al cerrar la ventana
-    # ------------------------------------------------------
     def closeEvent(self, event):
         self.cap.release()
 
 
-# ==========================================================
-#   EJECUCIÓN DIRECTA
-# ==========================================================
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     ventana = RegistroDocente()

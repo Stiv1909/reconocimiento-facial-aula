@@ -1,75 +1,72 @@
 from modules.conexion import crear_conexion, cerrar_conexion
+from datetime import datetime
 
 
-# ==========================================================
-#   FUNCIÓN: registrar_estudiante
-#   Descripción:
-#       - Inserta un nuevo estudiante en la tabla "estudiantes".
-#       - Reordena los IDs dentro del grado en orden alfabético
-#         (Apellidos + Nombres).
-#       - Los IDs siguen el formato: 6-1 → "61XX", 10-2 → "102XX".
-#   Parámetros:
-#       - nombre (str)
-#       - apellido (str)
-#       - grado (str) → ejemplo "6-1"
-#       - foto_bytes (binario) → foto capturada
-#   Retorna:
-#       - True  -> si se registró correctamente
-#       - False -> si ocurrió un error
-# ==========================================================
-def registrar_estudiante(nombre, apellido, grado, foto_bytes):
-    conexion = None
-    cursor = None
+# ----------------------------------------------------------
+#  Utilidad: Generar id_estudiante
+#  Formato: AÑO + grado_num(2) + grupo + consecutivo(2)
+#  Ej: 2025 + 6-1 -> prefijo_grado="061" -> 202506101
+# ----------------------------------------------------------
+def generar_id_estudiante(anio, grado):
+    conexion = crear_conexion()
+    cursor = conexion.cursor()
     try:
+        # Parsear grado: "6-1" -> num="6", grupo="1"
+        num, grupo = grado.split("-")
+        prefijo_grado = f"{int(num):02d}{grupo}"   # "061"
+
+        # Contar cuántas matrículas (o inscripciones) hay en ese año+grado
+        cursor.execute("SELECT COUNT(*) FROM matriculas WHERE anio = %s AND grado = %s", (anio, grado))
+        total = cursor.fetchone()[0] or 0
+        consecutivo = total + 1
+
+        # Construir id inicial y asegurar unicidad frente a estudiantes existentes
+        while True:
+            id_est = f"{anio}{prefijo_grado}{consecutivo:02d}"
+            cursor.execute("SELECT COUNT(*) FROM estudiantes WHERE id_estudiante = %s", (id_est,))
+            existe = cursor.fetchone()[0]
+            if existe:
+                consecutivo += 1
+            else:
+                break
+
+        return id_est
+    finally:
+        cursor.close()
+        cerrar_conexion(conexion)
+
+
+# ==========================================================
+#   ESTUDIANTES (datos personales)
+# ==========================================================
+def registrar_estudiante(nombre, apellido, grado, foto_bytes=None, anio=None):
+    """
+    Registra un estudiante nuevo:
+      - genera id_estudiante según año+grado+consecutivo
+      - inserta en tabla estudiantes
+      - agrega la primera matrícula (estado 'Estudiante')
+    """
+    conexion, cursor = None, None
+    try:
+        if anio is None:
+            anio = datetime.now().year
+
+        # Generar id_estudiante
+        id_estudiante = generar_id_estudiante(anio, grado)
+
         conexion = crear_conexion()
         cursor = conexion.cursor()
 
-        # --- 1. Obtener estudiantes actuales del grado ---
-        sql_select = "SELECT id_estudiante, apellidos, nombres FROM estudiantes WHERE grado = %s"
-        cursor.execute(sql_select, (grado,))
-        estudiantes = cursor.fetchall()
-
-        # --- 2. Agregar el nuevo estudiante en memoria ---
-        estudiantes.append((None, apellido, nombre))
-
-        # --- 3. Ordenar alfabéticamente ---
-        estudiantes.sort(key=lambda x: (x[1].lower(), x[2].lower()))
-
-        # --- 4. Prefijo del grado (ej: "6-1" → "61") ---
-        prefijo = grado.replace("-", "")
-
-        # --- 5. Generar IDs nuevos ---
-        nuevos_estudiantes = []
-        for i, (id_est, ape, nom) in enumerate(estudiantes, start=1):
-            nuevo_id = f"{prefijo}{i:02d}"
-            nuevos_estudiantes.append((id_est, nuevo_id, ape, nom))
-
-        # --- 6A. IDs temporales para evitar conflictos ---
-        for id_est, _, ape, nom in nuevos_estudiantes:
-            if id_est is not None:
-                tmp_id = f"T{id_est}"  # Ej: T6101
-                cursor.execute(
-                    "UPDATE estudiantes SET id_estudiante = %s WHERE id_estudiante = %s",
-                    (tmp_id, id_est)
-                )
-
-        # --- 6B. Reasignar IDs definitivos ---
-        for id_est, nuevo_id, ape, nom in nuevos_estudiantes:
-            if id_est is not None:
-                cursor.execute(
-                    "UPDATE estudiantes SET id_estudiante = %s WHERE id_estudiante = %s",
-                    (nuevo_id, f"T{id_est}")
-                )
-
-        # --- 6C. Insertar el nuevo estudiante ---
-        for id_est, nuevo_id, ape, nom in nuevos_estudiantes:
-            if id_est is None:
-                sql_insert = """INSERT INTO estudiantes 
-                                (id_estudiante, nombres, apellidos, grado, foto_rostro)
-                                VALUES (%s, %s, %s, %s, %s)"""
-                cursor.execute(sql_insert, (nuevo_id, nom, ape, grado, foto_bytes))
-
+        # Insertar estudiante (datos personales)
+        sql = """INSERT INTO estudiantes (id_estudiante, nombres, apellidos, foto_rostro)
+                 VALUES (%s, %s, %s, %s)"""
+        cursor.execute(sql, (id_estudiante, nombre, apellido, foto_bytes))
         conexion.commit()
+
+        # Insertar la matrícula inicial
+        registrar_matricula(id_estudiante, grado, anio, estado="Estudiante")
+
+        print(f"✅ Estudiante {nombre} {apellido} registrado con ID {id_estudiante}")
         return True
 
     except Exception as e:
@@ -78,39 +75,51 @@ def registrar_estudiante(nombre, apellido, grado, foto_bytes):
             conexion.rollback()
         return False
     finally:
-        if cursor: cursor.close()
-        if conexion: cerrar_conexion(conexion)
+        if cursor:
+            cursor.close()
+        if conexion:
+            cerrar_conexion(conexion)
 
 
-# ==========================================================
-#   FUNCIÓN: buscar_estudiantes
-#   Descripción:
-#       - Consulta estudiantes aplicando filtros dinámicos:
-#         por nombre, grado y/o estado.
-#   Parámetros:
-#       - nombre (str)
-#       - grado (str)
-#       - estado (str)
-#   Retorna:
-#       - Lista de diccionarios con los estudiantes encontrados.
-# ==========================================================
-def buscar_estudiantes(nombre="", grado="", estado=""):
+def buscar_estudiantes(nombre="", grado="", estado="", anio=None):
+    """
+    Devuelve estudiantes junto a su ÚLTIMA matrícula (si existe).
+    Los filtros grado/estado/anio aplican sobre la última matrícula.
+    """
     conexion = crear_conexion()
     cursor = conexion.cursor(dictionary=True)
 
-    sql = """SELECT id_estudiante, nombres, apellidos, grado, estado
-             FROM estudiantes WHERE 1=1"""
+    sql = """
+        SELECT e.id_estudiante, e.nombres, e.apellidos,
+               (SELECT m.id_matricula FROM matriculas m WHERE m.id_estudiante = e.id_estudiante
+                    ORDER BY CAST(SUBSTRING_INDEX(m.id_matricula, '-', -1) AS UNSIGNED) DESC
+                    LIMIT 1) AS id_matricula,
+               (SELECT m.grado FROM matriculas m WHERE m.id_estudiante = e.id_estudiante
+                    ORDER BY CAST(SUBSTRING_INDEX(m.id_matricula, '-', -1) AS UNSIGNED) DESC
+                    LIMIT 1) AS grado,
+               (SELECT m.anio FROM matriculas m WHERE m.id_estudiante = e.id_estudiante
+                    ORDER BY CAST(SUBSTRING_INDEX(m.id_matricula, '-', -1) AS UNSIGNED) DESC
+                    LIMIT 1) AS anio,
+               (SELECT m.estado FROM matriculas m WHERE m.id_estudiante = e.id_estudiante
+                    ORDER BY CAST(SUBSTRING_INDEX(m.id_matricula, '-', -1) AS UNSIGNED) DESC
+                    LIMIT 1) AS estado
+        FROM estudiantes e
+        WHERE 1=1
+    """
     params = []
 
     if nombre:
-        sql += " AND (nombres LIKE %s OR apellidos LIKE %s)"
+        sql += " AND (e.nombres LIKE %s OR e.apellidos LIKE %s)"
         params.extend([f"%{nombre}%", f"%{nombre}%"])
     if grado:
-        sql += " AND grado = %s"
+        sql += " AND (SELECT m.grado FROM matriculas m WHERE m.id_estudiante = e.id_estudiante ORDER BY CAST(SUBSTRING_INDEX(m.id_matricula, '-', -1) AS UNSIGNED) DESC LIMIT 1) = %s"
         params.append(grado)
     if estado:
-        sql += " AND estado = %s"
+        sql += " AND (SELECT m.estado FROM matriculas m WHERE m.id_estudiante = e.id_estudiante ORDER BY CAST(SUBSTRING_INDEX(m.id_matricula, '-', -1) AS UNSIGNED) DESC LIMIT 1) = %s"
         params.append(estado)
+    if anio:
+        sql += " AND (SELECT m.anio FROM matriculas m WHERE m.id_estudiante = e.id_estudiante ORDER BY CAST(SUBSTRING_INDEX(m.id_matricula, '-', -1) AS UNSIGNED) DESC LIMIT 1) = %s"
+        params.append(anio)
 
     cursor.execute(sql, tuple(params))
     resultados = cursor.fetchall()
@@ -120,56 +129,49 @@ def buscar_estudiantes(nombre="", grado="", estado=""):
     return resultados
 
 
-# ==========================================================
-#   FUNCIÓN: actualizar_datos
-#   Descripción:
-#       - Modifica los datos de un estudiante (nombre, apellido,
-#         grado y estado).
-#       - Reordena IDs en caso de cambio de grado.
-#   Parámetros:
-#       - id_estudiante (str)
-#       - nombre (str)
-#       - apellido (str)
-#       - grado (str)
-#       - estado (str)
-#   Retorna:
-#       - True  -> si se actualizó correctamente
-#       - False -> si ocurrió un error
-# ==========================================================
-def actualizar_datos(id_estudiante, nombre, apellido, grado, estado):
-    conexion = None
-    cursor = None
+def actualizar_datos(id_estudiante, nombre, apellido, grado=None, estado=None):
+    """
+    Actualiza datos personales. 
+    Si cambia grado o estado respecto a la última matrícula,
+    se inserta una NUEVA matrícula (ej: -02, -03, ...).
+    """
+    conexion, cursor = None, None
     try:
         conexion = crear_conexion()
         cursor = conexion.cursor()
 
-        # --- 1. Obtener grado original ---
-        cursor.execute("SELECT grado FROM estudiantes WHERE id_estudiante = %s", (id_estudiante,))
-        row = cursor.fetchone()
-        grado_origen = row[0] if row else None
-
-        # --- 2. ID temporal para evitar duplicados ---
-        tmp_id = f"X{id_estudiante}"
-        cursor.execute(
-            "UPDATE estudiantes SET id_estudiante = %s WHERE id_estudiante = %s",
-            (tmp_id, id_estudiante)
-        )
-
-        # --- 3. Actualizar datos principales ---
-        sql_update = """UPDATE estudiantes 
-                        SET id_estudiante = %s, nombres = %s, apellidos = %s, grado = %s, estado = %s
+        # 1) Actualizar datos personales
+        sql_update = """UPDATE estudiantes
+                        SET nombres = %s, apellidos = %s
                         WHERE id_estudiante = %s"""
-        cursor.execute(sql_update, (tmp_id, nombre, apellido, grado, estado, tmp_id))
-
-        # --- 4. Reordenar IDs en el grado de origen ---
-        if grado_origen and grado_origen != grado:
-            reordenar_ids(cursor, grado_origen)
-
-        # --- 5. Reordenar IDs en el grado destino ---
-        reordenar_ids(cursor, grado)
-
+        cursor.execute(sql_update, (nombre, apellido, id_estudiante))
         conexion.commit()
-        print(f"✅ Estudiante {id_estudiante} actualizado y reordenado en {grado}.")
+
+        # 2) Obtener la última matrícula real
+        cursor.execute("""
+            SELECT id_matricula, grado, anio, estado
+            FROM matriculas
+            WHERE id_estudiante = %s
+            ORDER BY CAST(SUBSTRING_INDEX(id_matricula, '-', -1) AS UNSIGNED) DESC
+            LIMIT 1
+        """, (id_estudiante,))
+        last = cursor.fetchone()
+
+        last_grado = last[1] if last else None
+        last_estado = last[3] if last else None
+        print(f"🔎 Última matrícula encontrada: {last}")
+
+        # 3) Si hay cambio -> insertar nueva matrícula
+        if (grado is not None and grado != last_grado) or (estado is not None and estado != last_estado):
+            anio_actual = datetime.now().year
+            nuevo_grado = grado or last_grado
+            nuevo_estado = estado if state_is_valid(estado) else (last_estado or "Estudiante")
+
+            print(f"🟢 Cambio detectado → creando nueva matrícula para {id_estudiante}")
+            registrar_matricula(id_estudiante, nuevo_grado, anio_actual, nuevo_estado)
+        else:
+            print("⚠ No se detectaron cambios → no se creó matrícula nueva")
+
         return True
 
     except Exception as e:
@@ -178,21 +180,16 @@ def actualizar_datos(id_estudiante, nombre, apellido, grado, estado):
             conexion.rollback()
         return False
     finally:
-        if cursor: cursor.close()
-        if conexion: cerrar_conexion(conexion)
+        if cursor:
+            cursor.close()
+        if conexion:
+            cerrar_conexion(conexion)
 
 
-# ==========================================================
-#   FUNCIÓN: actualizar_rostro
-#   Descripción:
-#       - Cambia la foto de rostro de un estudiante.
-#   Parámetros:
-#       - id_estudiante (str)
-#       - foto_bytes (binario)
-#   Retorna:
-#       - True  -> si se actualizó correctamente
-#       - False -> si no se envió foto o hubo error
-# ==========================================================
+def state_is_valid(s):
+    return s in ("Estudiante", "Ex-Alumno")
+
+
 def actualizar_rostro(id_estudiante, foto_bytes=None):
     if foto_bytes is None:
         print("⚠ No se recibió foto para actualizar.")
@@ -200,56 +197,106 @@ def actualizar_rostro(id_estudiante, foto_bytes=None):
 
     conexion = crear_conexion()
     cursor = conexion.cursor()
-
     sql = "UPDATE estudiantes SET foto_rostro = %s WHERE id_estudiante = %s"
     cursor.execute(sql, (foto_bytes, id_estudiante))
     conexion.commit()
-
     cursor.close()
     cerrar_conexion(conexion)
+    print(f"✅ Rostro actualizado para {id_estudiante}")
     return True
 
 
 # ==========================================================
-#   FUNCIÓN AUXILIAR: reordenar_ids
-#   Descripción:
-#       - Reorganiza los IDs de un grado según apellidos y nombres.
-#       - Evita conflictos usando IDs temporales.
-#   Parámetros:
-#       - cursor: cursor activo de MySQL
-#       - grado (str)
+#   MATRICULAS (historial académico)
 # ==========================================================
-def reordenar_ids(cursor, grado):
-    # 1. Obtener estudiantes del grado
-    cursor.execute("SELECT id_estudiante, apellidos, nombres FROM estudiantes WHERE grado = %s", (grado,))
-    estudiantes = cursor.fetchall()
+def registrar_matricula(id_estudiante, grado, anio=None, estado="Estudiante"):
+    """
+    Inserta una nueva matrícula para un estudiante existente.
+    id_matricula = id_estudiante + "-" + consecutivo_por_estudiante (formato 02d)
+    """
+    conexion, cursor = None, None
+    try:
+        if anio is None:
+            anio = datetime.now().year
 
-    if not estudiantes:
-        return
+        conexion = crear_conexion()
+        cursor = conexion.cursor()
 
-    # 2. Ordenar por apellidos + nombres
-    estudiantes.sort(key=lambda x: (x[1].lower(), x[2].lower()))
+        # 1) Contar cuántas matrículas ya tiene
+        cursor.execute("SELECT COUNT(*) FROM matriculas WHERE id_estudiante = %s", (id_estudiante,))
+        total = cursor.fetchone()[0] or 0
+        consecutivo = total + 1
 
-    # 3. Prefijo según grado
-    prefijo = grado.replace("-", "")
+        id_matricula = f"{id_estudiante}-{consecutivo:02d}"
 
-    # 4. Generar nuevos IDs
-    nuevos = []
-    for i, (id_est, ape, nom) in enumerate(estudiantes, start=1):
-        nuevo_id = f"{prefijo}{i:02d}"
-        nuevos.append((id_est, nuevo_id))
+        # 2) Insertar nueva matrícula
+        sql_insert = """
+            INSERT INTO matriculas (id_matricula, id_estudiante, grado, anio, estado)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(sql_insert, (id_matricula, id_estudiante, grado, anio, estado))
+        conexion.commit()
 
-    # 5. IDs temporales únicos
-    for id_est, _ in nuevos:
-        tmp_id = f"TMP_{grado}_{id_est}"
-        cursor.execute(
-            "UPDATE estudiantes SET id_estudiante = %s WHERE id_estudiante = %s",
-            (tmp_id, id_est)
-        )
+        print(f"✅ Nueva matrícula registrada: {id_matricula} (grado={grado}, anio={anio}, estado={estado})")
+        return True
+    except Exception as e:
+        print("❌ Error al registrar matrícula:", e)
+        if conexion:
+            conexion.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conexion:
+            cerrar_conexion(conexion)
 
-    # 6. Reasignar IDs definitivos
-    for id_est, nuevo_id in nuevos:
-        cursor.execute(
-            "UPDATE estudiantes SET id_estudiante = %s WHERE id_estudiante = %s",
-            (nuevo_id, f"TMP_{grado}_{id_est}")
-        )
+
+def actualizar_matricula(id_matricula, grado=None, estado=None):
+    """
+    Actualiza campos de una matrícula existente (grado/estado).
+    """
+    conexion, cursor = None, None
+    try:
+        conexion = crear_conexion()
+        cursor = conexion.cursor()
+
+        sets, params = [], []
+        if grado is not None:
+            sets.append("grado = %s")
+            params.append(grado)
+        if estado is not None:
+            sets.append("estado = %s")
+            params.append(estado)
+
+        if not sets:
+            return False
+
+        sql_update = f"UPDATE matriculas SET {', '.join(sets)} WHERE id_matricula = %s"
+        params.append(id_matricula)
+        cursor.execute(sql_update, tuple(params))
+        conexion.commit()
+        print(f"✅ Matrícula {id_matricula} actualizada")
+        return True
+    except Exception as e:
+        print("❌ Error al actualizar matrícula:", e)
+        if conexion:
+            conexion.rollback()
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        if conexion:
+            cerrar_conexion(conexion)
+
+
+def obtener_matriculas_por_estudiante(id_estudiante):
+    conexion = crear_conexion()
+    cursor = conexion.cursor(dictionary=True)
+    sql = """SELECT id_matricula, grado, anio, estado
+             FROM matriculas WHERE id_estudiante = %s
+             ORDER BY CAST(SUBSTRING_INDEX(id_matricula, '-', -1) AS UNSIGNED) DESC"""
+    cursor.execute(sql, (id_estudiante,))
+    resultados = cursor.fetchall()
+    cursor.close()
+    cerrar_conexion(conexion)
+    return resultados
