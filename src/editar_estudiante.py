@@ -16,6 +16,25 @@ from modules.estudiantes import (
 
 
 # ==========================================================
+#   FUNCIÓN: clave de ordenamiento grado + apellido
+# ==========================================================
+def clave_grado_apellido(est):
+    try:
+        grado_txt = est.get("grado", "") or ""
+        # espera formato "NN-G" (ej. "10-2", "6-1")
+        parts = grado_txt.split("-")
+        if len(parts) >= 2:
+            num = int(parts[0])
+            grupo = int(parts[1])
+            return (num, grupo, (est.get("apellidos") or "").lower())
+        else:
+            # fallback si no tiene guion
+            return (999, 999, (est.get("apellidos") or "").lower())
+    except Exception:
+        return (999, 999, (est.get("apellidos") or "").lower())
+
+
+# ==========================================================
 #   CLASE: VentanaCapturaRostro
 # ==========================================================
 class VentanaCapturaRostro(QDialog):
@@ -23,11 +42,14 @@ class VentanaCapturaRostro(QDialog):
         super().__init__(parent)
         self.id_estudiante = id_estudiante
         self.setWindowTitle("📷 Actualizar Rostro - Institución Educativa del Sur")
-        self.resize(900, 600)
+        self.resize(950, 650)  # más espacio
         self.centrar_ventana()
 
         self.guia_pix = QPixmap("src/guia_silueta.png")
         self.init_ui()
+
+        # detector de rostros
+        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 
         # cámara
         self.cap = cv2.VideoCapture(0)
@@ -50,6 +72,7 @@ class VentanaCapturaRostro(QDialog):
         self.setStyleSheet("""
             QDialog { background-color: #0D1B2A; color: white; font-family: Arial; font-size: 14px;}
             QLabel#titulo { font-size: 22px; font-weight: bold; color: #E3F2FD; margin: 10px; }
+            QLabel#mensaje { font-size: 18px; font-weight: bold; color: #4CAF50; margin: 6px; }
             QPushButton { border-radius: 6px; padding: 8px 16px; font-weight: bold; color: white; }
             QPushButton#btnTomar { background-color: rgba(21,101,192,0.8); }
             QPushButton#btnCancelar { background-color: rgba(198,40,40,0.8); }
@@ -58,32 +81,53 @@ class VentanaCapturaRostro(QDialog):
 
         main = QVBoxLayout(self)
 
+        # Título
         titulo = QLabel("Actualizar Rostro del Estudiante")
         titulo.setObjectName("titulo")
         titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main.addWidget(titulo)
 
+        # Mensaje fijo (oculto visualmente pero ocupa espacio)
+        self.lbl_mensaje = QLabel("")
+        self.lbl_mensaje.setObjectName("mensaje")
+        self.lbl_mensaje.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_mensaje.setFixedHeight(30)  # asegura espacio fijo
+        main.addWidget(self.lbl_mensaje)
+
+        # Video
         self.lbl_video = QLabel()
-        self.lbl_video.setFixedSize(800, 450)  # proporción 16:9
-        self.lbl_video.setStyleSheet("""
-            background-color: black;
-            border-radius: 15px;
-        """)
+        self.lbl_video.setFixedSize(800, 460)
+        self.lbl_video.setStyleSheet("background-color: black; border-radius: 15px;")
         self.lbl_video.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main.addWidget(self.lbl_video, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # overlay guía (sin marco)
+        # overlay guía (silueta) → SIEMPRE visible
         self.lbl_guia = QLabel(self.lbl_video)
         self.lbl_guia.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.lbl_guia.setStyleSheet("background: transparent; border: none;")
         self.guia_opacity = QGraphicsOpacityEffect(self.lbl_guia)
         self.guia_opacity.setOpacity(0.55)
         self.lbl_guia.setGraphicsEffect(self.guia_opacity)
-        self.lbl_guia.hide()
 
+        if not self.guia_pix.isNull():
+            pix_guia = self.guia_pix.scaled(
+                self.lbl_video.width(), self.lbl_video.height(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            self.lbl_guia.setPixmap(pix_guia)
+            self.lbl_guia.resize(pix_guia.size())
+            self.lbl_guia.move(
+                (self.lbl_video.width() - pix_guia.width()) // 2,
+                (self.lbl_video.height() - pix_guia.height()) // 2
+            )
+        self.lbl_guia.show()  # 👈 siempre visible
+
+        # Botones
         botones = QHBoxLayout()
         self.btn_tomar = QPushButton("📸 Tomar Foto")
         self.btn_tomar.setObjectName("btnTomar")
+        self.btn_tomar.setEnabled(False)
         self.btn_cancelar = QPushButton("❌ Cancelar")
         self.btn_cancelar.setObjectName("btnCancelar")
         botones.addStretch()
@@ -99,52 +143,37 @@ class VentanaCapturaRostro(QDialog):
         frame = cv2.flip(frame, 1)
         self.ultimo_frame = frame.copy()
 
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        rostros = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
+
+        if len(rostros) > 0:
+            self.lbl_mensaje.setText("✅ Rostro detectado, capture la imagen")
+            self.btn_tomar.setEnabled(True)
+        else:
+            self.lbl_mensaje.setText("")
+            self.btn_tomar.setEnabled(False)
+
+        # convertir frame para mostrar en QLabel
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb.shape
         img = QImage(rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
-        pix_video = QPixmap.fromImage(img)
-
-        target_w = self.lbl_video.width()
-        target_h = self.lbl_video.height()
-
-        scaled_pix = pix_video.scaled(
-            target_w, target_h,
+        pix_video = QPixmap.fromImage(img).scaled(
+            self.lbl_video.width(), self.lbl_video.height(),
             Qt.AspectRatioMode.KeepAspectRatioByExpanding,
             Qt.TransformationMode.SmoothTransformation
         )
-
-        crop_x = (scaled_pix.width() - target_w) // 2
-        crop_y = (scaled_pix.height() - target_h) // 2
-        cropped = scaled_pix.copy(crop_x, crop_y, target_w, target_h)
-
-        self.lbl_video.setPixmap(cropped)
-
-        if not self.guia_pix.isNull():
-            pix_guia = self.guia_pix.scaled(
-                target_w, target_h,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            )
-            self.lbl_guia.setPixmap(pix_guia)
-            self.lbl_guia.resize(pix_guia.size())
-            self.lbl_guia.move((target_w - pix_guia.width()) // 2,
-                               (target_h - pix_guia.height()) // 2)
-            self.lbl_guia.show()
-        else:
-            self.lbl_guia.hide()
+        self.lbl_video.setPixmap(pix_video)
 
     def tomar_foto(self):
         if self.ultimo_frame is None:
             QMessageBox.warning(self, "Error", "No se pudo capturar la imagen.")
             return
 
-        # convertir a QPixmap para mostrar en preview
         rgb = cv2.cvtColor(self.ultimo_frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb.shape
         img = QImage(rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
         pix = QPixmap.fromImage(img).scaled(500, 350, Qt.AspectRatioMode.KeepAspectRatio)
 
-        # diálogo personalizado
         dlg = QDialog(self)
         dlg.setWindowTitle("Confirmar Foto")
         dlg.resize(550, 500)
@@ -165,7 +194,6 @@ class VentanaCapturaRostro(QDialog):
         btn_yes.setStyleSheet("background-color: #1565C0; color: white; padding: 8px 20px; border-radius: 8px; font-weight: bold;")
         btn_no = QPushButton("❌ No")
         btn_no.setStyleSheet("background-color: #C62828; color: white; padding: 8px 20px; border-radius: 8px; font-weight: bold;")
-
         botones.addStretch()
         botones.addWidget(btn_yes)
         botones.addWidget(btn_no)
@@ -183,11 +211,58 @@ class VentanaCapturaRostro(QDialog):
             else:
                 QMessageBox.critical(self, "Error", "❌ Ocurrió un error al guardar el rostro.")
             self.close()
-        # si elige No, regresa a la cámara
 
     def cancelar(self):
-        QMessageBox.warning(self, "Cancelado", "⚠ Captura cancelada por el usuario.")
+        dlg = QDialog(self)
+        dlg.setWindowTitle("")
+
+        # Ajustamos tamaño tipo tarjeta
+        dlg.setFixedSize(420, 200)
+        dlg.setStyleSheet("""
+            QDialog {
+                background-color: #0D1B2A;
+                border-radius: 15px;
+            }
+            QLabel {
+                color: white;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton {
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                color: white;
+                background-color: #C62828;
+            }
+            QPushButton:hover {
+                background-color: #E53935;
+            }
+        """)
+
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        # Título tipo tarjeta
+        lbl_titulo = QLabel("⚠ Acción Cancelada")
+        lbl_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_titulo.setStyleSheet("font-size: 18px; color: white;")
+        layout.addWidget(lbl_titulo)
+
+        # Mensaje
+        lbl_msg = QLabel("La captura de rostro fue cancelada por el usuario.")
+        lbl_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(lbl_msg)
+
+        # Botón aceptar centrado
+        btn_ok = QPushButton("Aceptar")
+        btn_ok.clicked.connect(dlg.accept)
+        layout.addWidget(btn_ok, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        dlg.exec()
         self.close()
+
 
     def closeEvent(self, event):
         try:
@@ -197,6 +272,7 @@ class VentanaCapturaRostro(QDialog):
         if hasattr(self, "cap") and self.cap.isOpened():
             self.cap.release()
         super().closeEvent(event)
+
 
 # ==========================================================
 #   CLASE: EditarEstudiantes
@@ -300,7 +376,7 @@ class EditarEstudiantes(QWidget):
         btn_menu.setObjectName("btnMenu")
         btn_menu.clicked.connect(self.volver_menu)
 
-        btn_info = QPushButton("MÁS INFORMACIÓN")
+        btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
 
         top_layout = QHBoxLayout()
@@ -326,6 +402,7 @@ class EditarEstudiantes(QWidget):
         lbl_grado = QLabel("Grado:")
         self.cmb_grado = QComboBox()
         self.cmb_grado.setFixedWidth(100)
+        # mantener el mismo orden lógico en el combo filtro (vacío + grados)
         self.cmb_grado.addItems([
             "", "6-1", "6-2", "6-3", "6-4",
             "7-1", "7-2", "7-3", "7-4",
@@ -354,9 +431,9 @@ class EditarEstudiantes(QWidget):
 
         # --- Tabla ---
         self.tabla = QTableWidget()
-        self.tabla.setColumnCount(7)
+        self.tabla.setColumnCount(6)
         self.tabla.setHorizontalHeaderLabels([
-            "ID Matrícula", "Nombres", "Apellidos", "Grado", "Estado", "Actualizar Datos", "Actualizar Rostro"
+            "Nombres", "Apellidos", "Grado", "Estado", "Actualizar Datos", "Actualizar Rostro"
         ])
         self.tabla.setAlternatingRowColors(True)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -403,6 +480,9 @@ class EditarEstudiantes(QWidget):
         estado = self.cmb_estado.currentText()
 
         resultados = buscar_estudiantes(nombre, grado, estado)
+        # --- Ordenar: primero por grado (numérico), luego por apellido ---
+        resultados = sorted(resultados, key=clave_grado_apellido)
+
         self.tabla.setRowCount(len(resultados))
 
         if resultados:
@@ -411,16 +491,14 @@ class EditarEstudiantes(QWidget):
             self.stack_resultados.setCurrentIndex(2)
 
         for fila, est in enumerate(resultados):
-            id_est = est["id_estudiante"]
-            id_mat = est["id_matricula"]
-            nombre = est["nombres"]
-            apellido = est["apellidos"]
-            grado = est["grado"]
-            estado = est["estado"]
+            id_est = est.get("id_estudiante")
+            nombre = est.get("nombres", "")
+            apellido = est.get("apellidos", "")
+            grado = est.get("grado", "")
+            estado = est.get("estado", "")
 
-            self.tabla.setItem(fila, 0, QTableWidgetItem(str(id_mat)))
-            self.tabla.setItem(fila, 1, QTableWidgetItem(nombre))
-            self.tabla.setItem(fila, 2, QTableWidgetItem(apellido))
+            self.tabla.setItem(fila, 0, QTableWidgetItem(nombre))
+            self.tabla.setItem(fila, 1, QTableWidgetItem(apellido))
 
             combo_grado = QComboBox()
             combo_grado.addItems([
@@ -432,29 +510,31 @@ class EditarEstudiantes(QWidget):
                 "11-1", "11-2", "11-3"
             ])
             combo_grado.setCurrentText(grado or "")
-            self.tabla.setCellWidget(fila, 3, combo_grado)
+            self.tabla.setCellWidget(fila, 2, combo_grado)
 
             combo_estado = QComboBox()
             combo_estado.addItems(["Estudiante", "Ex-Alumno"])
             combo_estado.setCurrentText(estado or "")
-            self.tabla.setCellWidget(fila, 4, combo_estado)
+            self.tabla.setCellWidget(fila, 3, combo_estado)
 
             btn_actualizar = QPushButton("Actualizar")
             btn_actualizar.setObjectName("btnActualizar")
-            btn_actualizar.clicked.connect(lambda _, f=fila, i_est=id_est, i_mat=id_mat: self.actualizar_datos_ui(f, i_est, i_mat))
+            # capturamos fila e id_est en defaults para evitar late-binding
+            btn_actualizar.clicked.connect(lambda _, f=fila, i_est=id_est: self.actualizar_datos_ui(f, i_est))
 
             btn_rostro = QPushButton("Rostro")
             btn_rostro.setObjectName("btnRostro")
             btn_rostro.clicked.connect(lambda _, i=id_est: self.actualizar_rostro_ui(i))
 
-            self.tabla.setCellWidget(fila, 5, btn_actualizar)
-            self.tabla.setCellWidget(fila, 6, btn_rostro)
+            self.tabla.setCellWidget(fila, 4, btn_actualizar)
+            self.tabla.setCellWidget(fila, 5, btn_rostro)
 
-    def actualizar_datos_ui(self, fila, id_estudiante, id_matricula):
-        nombre = self.tabla.item(fila, 1).text().strip()
-        apellido = self.tabla.item(fila, 2).text().strip()
-        nuevo_grado = self.tabla.cellWidget(fila, 3).currentText()
-        nuevo_estado = self.tabla.cellWidget(fila, 4).currentText()
+    def actualizar_datos_ui(self, fila, id_estudiante):
+        # obtener datos de la fila (índices corregidos)
+        nombre = self.tabla.item(fila, 0).text().strip() if self.tabla.item(fila, 0) else ""
+        apellido = self.tabla.item(fila, 1).text().strip() if self.tabla.item(fila, 1) else ""
+        nuevo_grado = self.tabla.cellWidget(fila, 2).currentText() if self.tabla.cellWidget(fila, 2) else ""
+        nuevo_estado = self.tabla.cellWidget(fila, 3).currentText() if self.tabla.cellWidget(fila, 3) else ""
 
         if not nombre or not apellido:
             QMessageBox.warning(self, "Campos obligatorios", "⚠ Nombres y Apellidos no pueden estar vacíos.")
@@ -475,13 +555,12 @@ class EditarEstudiantes(QWidget):
     def volver_menu(self):
         from menu import InterfazAdministrativa
         self.ventana_menu = InterfazAdministrativa()
-        self.ventana_menu.show()
-        self.ventana_menu.centrar_ventana(1000, 600)
+        self.ventana_menu.showMaximized()
         self.close()
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     ventana = EditarEstudiantes()
-    ventana.show()
+    ventana.showMaximized()
     sys.exit(app.exec())

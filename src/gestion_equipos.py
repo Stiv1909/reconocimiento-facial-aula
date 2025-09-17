@@ -77,7 +77,7 @@ class GestionEquipos(QWidget):
         btn_menu.setObjectName("btnMenu")
         btn_menu.clicked.connect(self.volver_menu)
 
-        btn_info = QPushButton("MÁS INFORMACIÓN")
+        btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
 
         top_layout = QHBoxLayout()
@@ -259,7 +259,7 @@ class GestionEquipos(QWidget):
     def volver_menu(self):
         from menu import InterfazAdministrativa
         self.ventana_menu = InterfazAdministrativa()
-        self.ventana_menu.show()
+        self.ventana_menu.showMaximized()
         self.close()
 
 

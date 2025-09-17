@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QGridLayout, QToolButton, QFrame, QGraphicsDropShadowEffect
 )
-from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter, QBrush, QLinearGradient
+from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter, QBrush, QLinearGradient, QPainterPath
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, pyqtProperty
 
 # Importa tus ventanas
@@ -11,6 +11,44 @@ from editar_estudiante import EditarEstudiantes
 from gestion_equipos import GestionEquipos
 from registro_docente import RegistroDocente
 from registro_estudiante import RegistroEstudiantes
+
+
+# --- Función utilitaria: crear avatar circular ---
+def crear_avatar_circular(ruta_imagen, tamaño=80, borde=3, color_borde=QColor("white")):
+    """Devuelve un QPixmap circular con borde opcional desde una imagen."""
+    pixmap = QPixmap(ruta_imagen)
+    if pixmap.isNull():
+        return QPixmap()
+
+    # Escalar imagen cuadrada
+    pixmap = pixmap.scaled(
+        tamaño, tamaño,
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation
+    )
+
+    # Crear un QPixmap transparente donde dibujar el círculo
+    avatar = QPixmap(tamaño, tamaño)
+    avatar.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(avatar)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    # Dibujar borde
+    if borde > 0:
+        painter.setPen(QColor(color_borde))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(0, 0, tamaño - 1, tamaño - 1)
+
+    # Recortar en círculo
+    path = QPainterPath()
+    path.addEllipse(borde, borde, tamaño - 2 * borde, tamaño - 2 * borde)
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.end()
+
+    return avatar
+
 
 # --- Botón avanzado ---
 class BotonTarjetaAvanzado(QToolButton):
@@ -131,12 +169,15 @@ class BotonTarjetaAvanzado(QToolButton):
             painter.drawText(rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, self.texto)
             painter.setOpacity(1.0)
 
+
 # --- Interfaz principal ---
 class InterfazAdministrativa(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Interfaz Administrativa - Institución Educativa del Sur")
-        self.centrar_ventana(1000, 600)
+        self.default_width = 1000
+        self.default_height = 600
+        self.resize(self.default_width, self.default_height)
         self.init_ui()
 
     def centrar_ventana(self, ancho=1000, alto=600):
@@ -145,6 +186,13 @@ class InterfazAdministrativa(QWidget):
         frame = self.frameGeometry()
         frame.moveCenter(screen.center())
         self.move(frame.topLeft())
+    
+    def changeEvent(self, event):
+        """Detecta cambios de estado (maximizar/restaurar)."""
+        if event.type() == event.Type.WindowStateChange:
+            if not self.isMaximized():  # Si el usuario restaura
+                self.centrar_ventana(self.default_width, self.default_height)
+        super().changeEvent(event)
 
     def init_ui(self):
         self.setStyleSheet("""
@@ -185,9 +233,18 @@ class InterfazAdministrativa(QWidget):
         texto_layout.addWidget(lema)
         texto_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
+        # Foto docente circular
+        foto_docente = QLabel()
+        foto_docente.setObjectName("fotoDocente")
+        pixmap_docente = crear_avatar_circular("src/icons/user.png", 80, borde=3, color_borde=QColor("white"))
+        if not pixmap_docente.isNull():
+            foto_docente.setPixmap(pixmap_docente)
+        foto_docente.setFixedSize(80, 80)
+        foto_docente.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         btn_sesion = QPushButton("CERRAR SESIÓN")
         btn_sesion.setObjectName("btnSesion")
-        btn_info = QPushButton("MÁS INFORMACIÓN")
+        btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
 
         header_layout = QHBoxLayout()
@@ -196,6 +253,7 @@ class InterfazAdministrativa(QWidget):
         header_layout.addStretch()
         header_layout.addWidget(btn_sesion)
         header_layout.addWidget(btn_info)
+        header_layout.addWidget(foto_docente)
 
         separador = QFrame()
         separador.setFrameShape(QFrame.Shape.HLine)
@@ -254,28 +312,28 @@ class InterfazAdministrativa(QWidget):
     # --- Métodos abrir ventanas ---
     def abrir_gestion_equipos(self):
         self.ventana_equipos = GestionEquipos()
-        self.ventana_equipos.show()
+        self.ventana_equipos.showMaximized()
         self.close()
 
     def abrir_editar_estudiantes(self):
         self.ventana_editar = EditarEstudiantes()
-        self.ventana_editar.show()
+        self.ventana_editar.showMaximized()
         self.close()
 
     def abrir_registrar_docente(self):
         self.ventana_docente = RegistroDocente()
-        self.ventana_docente.show()
+        self.ventana_docente.showMaximized()
         self.close()
 
     def abrir_registrar_estudiantes(self):
         self.ventana_estudiante = RegistroEstudiantes()
-        self.ventana_estudiante.show()
+        self.ventana_estudiante.showMaximized()
         self.close()
+
 
 # ==========================================================
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     ventana = InterfazAdministrativa()
-    ventana.show()
-    ventana.centrar_ventana(1000, 600)
+    ventana.showMaximized()  # 👈 Arranca maximizada
     sys.exit(app.exec())

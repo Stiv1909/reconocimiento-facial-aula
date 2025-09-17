@@ -22,6 +22,9 @@ class RegistroDocente(QWidget):
         self.foto_capturada = None
         self.cap = cv2.VideoCapture(0)
 
+        # --- Detector de rostro ---
+        self.detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+
         # Timer para refrescar cámara
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_frame)
@@ -97,9 +100,9 @@ class RegistroDocente(QWidget):
         lema.setObjectName("lemaColegio")
 
         text_layout = QVBoxLayout()
-        text_layout.setSpacing(0)               # Sin espacio entre nombre y lema
-        text_layout.setContentsMargins(0, 0, 0, 0)  # Sin márgenes internos
-        text_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)  # Centrado vertical
+        text_layout.setSpacing(0)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         text_layout.addWidget(nombre)
         text_layout.addWidget(lema)
 
@@ -107,7 +110,7 @@ class RegistroDocente(QWidget):
         btn_menu.setObjectName("btnMenu")
         btn_menu.clicked.connect(self.volver_menu)
 
-        btn_info = QPushButton("MÁS INFORMACIÓN")
+        btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
 
         header = QHBoxLayout()
@@ -172,10 +175,16 @@ class RegistroDocente(QWidget):
         self.lbl_guia.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_guia.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
+        # --- Mensaje de estado ---
+        self.lbl_estado = QLabel("")
+        self.lbl_estado.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_estado.setStyleSheet("font-size: 16px; font-weight: bold; color: green;")
+
         # --- Botones ---
-        btn_capturar = QPushButton("Capturar")
-        btn_capturar.setObjectName("btnCapturar")
-        btn_capturar.clicked.connect(self.toggle_captura)
+        self.btn_capturar = QPushButton("Capturar")
+        self.btn_capturar.setObjectName("btnCapturar")
+        self.btn_capturar.clicked.connect(self.toggle_captura)
+        self.btn_capturar.setEnabled(False)  # 🔹 empieza deshabilitado
 
         btn_agregar = QPushButton("Agregar")
         btn_agregar.setObjectName("btnAgregar")
@@ -183,23 +192,22 @@ class RegistroDocente(QWidget):
 
         bottom = QHBoxLayout()
         bottom.addStretch()
-        bottom.addWidget(btn_capturar)
+        bottom.addWidget(self.btn_capturar)
         bottom.addSpacing(20)
         bottom.addWidget(btn_agregar)
         bottom.addStretch()
 
-        # --- Marco con sombra ---
-        # --- Layout principal sin tarjeta ---
+        # --- Layout principal ---
         main_layout = QVBoxLayout()
         main_layout.addLayout(header)
         main_layout.addWidget(separador)
         main_layout.addWidget(titulo)
         main_layout.addLayout(form)
         main_layout.addWidget(self.lbl_camara, alignment=Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(self.lbl_estado)   # 🔹 mensaje debajo de la cámara
         main_layout.addLayout(bottom)
 
         self.setLayout(main_layout)
-
 
     def update_frame(self):
         if not self.camara_activa:
@@ -207,7 +215,17 @@ class RegistroDocente(QWidget):
         ret, frame = self.cap.read()
         if not ret:
             return
-        frame = cv2.flip(frame, 1)  # espejo
+        frame = cv2.flip(frame, 1)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        rostros = self.detector.detectMultiScale(gray, 1.3, 5)
+
+        if len(rostros) > 0:
+            self.lbl_estado.setText("✅ Rostro detectado, capture la imagen")
+            self.btn_capturar.setEnabled(True)
+        else:
+            self.lbl_estado.setText("")
+            self.btn_capturar.setEnabled(False)
+
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, _ = rgb.shape
         tw = self.lbl_camara.width()
@@ -223,7 +241,7 @@ class RegistroDocente(QWidget):
             ret, frame = self.cap.read()
             if not ret:
                 return
-            frame = cv2.flip(frame, 1)  # espejo en captura
+            frame = cv2.flip(frame, 1)
             self.foto_capturada = frame.copy()
             self.camara_activa = False
             self.update_frame()
@@ -263,8 +281,7 @@ class RegistroDocente(QWidget):
         from menu import InterfazAdministrativa
         self.cap.release()
         self.ventana_menu = InterfazAdministrativa()
-        self.ventana_menu.show()
-        self.ventana_menu.centrar_ventana(1000, 600)  # 👈 lo centra
+        self.ventana_menu.showMaximized()
         self.close()
 
     def closeEvent(self, event):
