@@ -8,14 +8,14 @@ from scipy.spatial import distance as dist
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout,
-    QHBoxLayout, QFrame, QGraphicsDropShadowEffect
+    QHBoxLayout, QFrame, QGraphicsDropShadowEffect, QMessageBox
 )
 from PyQt6.QtGui import QPixmap, QImage, QColor
 from PyQt6.QtCore import Qt, QTimer
 
 from modules.doc_login import cargar_docentes
 from menu import InterfazAdministrativa   # ✅ Importar tu menú
-
+from modules.sesion import Sesion
 
 # -------------------------------
 # Función para calcular EAR (Eye Aspect Ratio)
@@ -26,6 +26,14 @@ def calcular_ear(ojo):
     C = dist.euclidean(ojo[0], ojo[3])
     return (A + B) / (2.0 * C)
 
+def normalizar_foto(foto):
+        if foto is None:
+            return None
+        if isinstance(foto, (bytes, bytearray)):
+            return bytes(foto)
+        if isinstance(foto, memoryview):
+            return foto.tobytes()
+        return None
 
 class InicioSesionDocente(QWidget):
     def __init__(self):
@@ -181,6 +189,54 @@ class InicioSesionDocente(QWidget):
 
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(frame)
+    
+    def confirmar_e_iniciar_sesion(self):
+        # asegurarse de tener un docente detectado
+        if not self.docente_detectado:
+            QMessageBox.critical(self, "Error", "No se encontró la información del docente para iniciar sesión.")
+            return
+
+        # Mapear keys robustamente (dependen de cómo cargues docentes)
+        d = self.docente_detectado
+        usuario_data = {
+            "id": d.get("id_docente") or d.get("id") or d.get("cedula"),
+            "nombres": d.get("nombres") or d.get("nombre"),
+            "apellidos": d.get("apellidos") or d.get("apellido"),
+            "rol": d.get("rol") or "docente",
+            "foto": normalizar_foto(d.get("foto_rostro") or d.get("foto"))
+        }
+
+        # iniciar sesión en memoria
+        Sesion.iniciar_sesion(usuario_data)
+
+        # abrir menú
+        self.abrir_menu()
+
+    def login(self):
+        usuario = self.txt_usuario.text().strip()
+        contrasena = self.txt_contrasena.text().strip()
+
+        conexion = crear_conexion()
+        cursor = conexion.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM usuarios WHERE usuario=%s AND contrasena=%s", (usuario, contrasena))
+        datos = cursor.fetchone()
+
+        if datos:
+            # ✅ Guardar sesión
+            Sesion.iniciar_sesion({
+                "id": self.docente_detectado["id"],
+                "nombres": self.docente_detectado["nombres"],
+                "apellidos": self.docente_detectado["apellidos"],
+                "rol": "docente"
+            })
+
+            QMessageBox.information(self, "Bienvenido", f"Has iniciado sesión como {datos['rol']}")
+            self.abrir_menu_principal()
+        else:
+            QMessageBox.warning(self, "Error", "Usuario o contraseña incorrectos")
+
+        cursor.close()
+        cerrar_conexion(conexion)
 
     def update_frame(self):
         ret, frame = self.cap.read()
@@ -266,7 +322,8 @@ class InicioSesionDocente(QWidget):
                     self.lbl_docente.setText(
                         f"✅ Bienvenido {self.docente_detectado['nombres']} {self.docente_detectado['apellidos']}, redirigiendo..."
                     )
-                    QTimer.singleShot(3000, self.abrir_menu)
+                    # esperar 3s y luego iniciar sesión y abrir menú
+                    QTimer.singleShot(3000, self.confirmar_e_iniciar_sesion)
 
     def verificar_movimiento(self, encoding_actual):
         if self.ultimo_encoding is not None:

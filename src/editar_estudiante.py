@@ -13,6 +13,7 @@ from modules.estudiantes import (
     actualizar_datos,
     actualizar_rostro,
 )
+from modules.sesion import Sesion   # 👈 Importamos la sesión
 
 
 # ==========================================================
@@ -40,6 +41,14 @@ def clave_grado_apellido(est):
 class VentanaCapturaRostro(QDialog):
     def __init__(self, id_estudiante, parent=None):
         super().__init__(parent)
+
+        # 👇 Verificamos sesión
+        if not Sesion.esta_autenticado():
+            QMessageBox.critical(self, "Acceso denegado", "❌ Debes iniciar sesión para acceder a esta función.")
+            self.close()
+            return
+
+
         self.id_estudiante = id_estudiante
         self.setWindowTitle("📷 Actualizar Rostro - Institución Educativa del Sur")
         self.resize(950, 650)  # más espacio
@@ -280,6 +289,13 @@ class VentanaCapturaRostro(QDialog):
 class EditarEstudiantes(QWidget):
     def __init__(self):
         super().__init__()
+
+        # 👇 Verificamos sesión
+        if not Sesion.esta_autenticado():
+            QMessageBox.critical(self, "Acceso denegado", "❌ Debes iniciar sesión para acceder a esta ventana.")
+            self.close()
+            return
+        
         self.setWindowTitle("Editar Estudiantes - Institución Educativa del Sur")
         self.resize(1250, 670)
         self.centrar_ventana()
@@ -561,6 +577,11 @@ class EditarEstudiantes(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    ventana = EditarEstudiantes()
-    ventana.showMaximized()
+    # 👇 Antes de abrir la ventana, validamos si hay sesión
+    if Sesion.esta_autenticado():
+        ventana = EditarEstudiantes()
+        ventana.showMaximized()
+    else:
+        QMessageBox.warning(None, "Sesión requerida", "⚠ Debes iniciar sesión para acceder al sistema.")
+
     sys.exit(app.exec())

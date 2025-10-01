@@ -10,10 +10,19 @@ from PyQt6.QtCore import Qt, QTimer
 
 from modules.docentes import registrar_docente
 
+from modules.sesion import Sesion
+
+
 
 class RegistroDocente(QWidget):
     def __init__(self):
         super().__init__()
+
+        # ✅ Verificar sesión
+        if not Sesion.esta_autenticado():
+            QMessageBox.critical(self, "Acceso denegado", "⚠ Debe iniciar sesión para usar esta ventana.")
+            sys.exit(0)  # Cierra la app si no hay sesión activa
+
         self.setWindowTitle("Registro de Docentes - Institución Educativa del Sur")
         self.centrar_ventana(1250, 670)
 

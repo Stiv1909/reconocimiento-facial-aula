@@ -3,10 +3,11 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QGridLayout, QToolButton, QFrame, QGraphicsDropShadowEffect
 )
-from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter, QBrush, QLinearGradient, QPainterPath
+from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter, QBrush, QLinearGradient, QPainterPath, QImage
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, pyqtProperty
 
-# Importa tus ventanas
+from modules.sesion import Sesion
+# Importa ventanas
 from editar_estudiante import EditarEstudiantes
 from gestion_equipos import GestionEquipos
 from registro_docente import RegistroDocente
@@ -15,32 +16,27 @@ from registro_estudiante import RegistroEstudiantes
 
 # --- Función utilitaria: crear avatar circular ---
 def crear_avatar_circular(ruta_imagen, tamaño=80, borde=3, color_borde=QColor("white")):
-    """Devuelve un QPixmap circular con borde opcional desde una imagen."""
     pixmap = QPixmap(ruta_imagen)
     if pixmap.isNull():
         return QPixmap()
 
-    # Escalar imagen cuadrada
     pixmap = pixmap.scaled(
         tamaño, tamaño,
         Qt.AspectRatioMode.KeepAspectRatioByExpanding,
         Qt.TransformationMode.SmoothTransformation
     )
 
-    # Crear un QPixmap transparente donde dibujar el círculo
     avatar = QPixmap(tamaño, tamaño)
     avatar.fill(Qt.GlobalColor.transparent)
 
     painter = QPainter(avatar)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    # Dibujar borde
     if borde > 0:
         painter.setPen(QColor(color_borde))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawEllipse(0, 0, tamaño - 1, tamaño - 1)
 
-    # Recortar en círculo
     path = QPainterPath()
     path.addEllipse(borde, borde, tamaño - 2 * borde, tamaño - 2 * borde)
     painter.setClipPath(path)
@@ -52,20 +48,18 @@ def crear_avatar_circular(ruta_imagen, tamaño=80, borde=3, color_borde=QColor("
 
 # --- Botón avanzado ---
 class BotonTarjetaAvanzado(QToolButton):
-    """Botón tipo tarjeta con efecto hover: icono grande que se reduce, texto aparece suavemente y brillo animado."""
     def __init__(self, icono, texto="", color_borde="#2E7D32", parent=None):
         super().__init__(parent)
         self.texto = texto
         self.color_borde = color_borde
-
-        # Brillo
         self._brillo_pos = -1.0
+
+        # Animaciones
         self.anim_brillo = QPropertyAnimation(self, b"brillo")
         self.anim_brillo.setDuration(800)
         self.anim_brillo.setStartValue(-1.0)
         self.anim_brillo.setEndValue(1.0)
 
-        # Icono
         self.setIcon(QIcon(icono))
         self.icon_size_default = 180
         self.icon_size_hover = 130
@@ -81,7 +75,6 @@ class BotonTarjetaAvanzado(QToolButton):
             }
         """)
 
-        # Sombra
         sombra = QGraphicsDropShadowEffect()
         sombra.setBlurRadius(25)
         sombra.setXOffset(0)
@@ -89,11 +82,9 @@ class BotonTarjetaAvanzado(QToolButton):
         sombra.setColor(QColor(0, 0, 0, 180))
         self.setGraphicsEffect(sombra)
 
-        # Animación icono
         self.anim_icono = QPropertyAnimation(self, b"iconoSize")
         self.anim_icono.setDuration(300)
 
-        # Animación texto (opacidad)
         self.text_opacity = 0.0
         self.anim_texto = QPropertyAnimation(self, b"textOpacity")
         self.anim_texto.setDuration(300)
@@ -102,7 +93,6 @@ class BotonTarjetaAvanzado(QToolButton):
     @pyqtProperty(float)
     def brillo(self):
         return self._brillo_pos
-
     @brillo.setter
     def brillo(self, value):
         self._brillo_pos = value
@@ -150,7 +140,6 @@ class BotonTarjetaAvanzado(QToolButton):
         self.update()
         super().leaveEvent(event)
 
-    # --- Pintado custom ---
     def paintEvent(self, event):
         super().paintEvent(event)
         painter = QPainter(self)
@@ -178,6 +167,14 @@ class InterfazAdministrativa(QWidget):
         self.default_width = 1000
         self.default_height = 600
         self.resize(self.default_width, self.default_height)
+
+        self.usuario = Sesion.obtener_usuario()
+
+        if not self.usuario:
+            # No hay sesión: cerramos la ventana (redirigir al login)
+            self.close()
+            return
+
         self.init_ui()
 
     def centrar_ventana(self, ancho=1000, alto=600):
@@ -186,29 +183,21 @@ class InterfazAdministrativa(QWidget):
         frame = self.frameGeometry()
         frame.moveCenter(screen.center())
         self.move(frame.topLeft())
-    
+
     def changeEvent(self, event):
-        """Detecta cambios de estado (maximizar/restaurar)."""
         if event.type() == event.Type.WindowStateChange:
-            if not self.isMaximized():  # Si el usuario restaura
+            if not self.isMaximized():
                 self.centrar_ventana(self.default_width, self.default_height)
         super().changeEvent(event)
 
     def init_ui(self):
         self.setStyleSheet("""
-            QWidget {
-                background-color: #0D1B2A; /* azul oscuro */
-                color: white;
-                font-family: Arial;
-                font-size: 14px;
-            }
+            QWidget { background-color: #0D1B2A; color: white; font-family: Arial; font-size: 14px; }
             QLabel#titulo { font-size: 28px; font-weight: bold; color: #E3F2FD; }
             QLabel#subtitulo { font-size: 16px; color: #ccc; }
             QLabel#nombreColegio { font-size: 36px; font-weight: bold; color: #E3F2FD; }
             QLabel#lemaColegio { font-size: 22px; color: #aaa; }
-            QPushButton {
-                border-radius: 6px; padding: 6px 12px; font-weight: bold; color: white;
-            }
+            QPushButton { border-radius: 6px; padding: 6px 12px; font-weight: bold; color: white; }
             QPushButton#btnSesion { background-color: rgba(198,40,40,0.60); }
             QPushButton#btnInfo { background-color: rgba(21, 101, 192,0.60); }
         """)
@@ -233,19 +222,26 @@ class InterfazAdministrativa(QWidget):
         texto_layout.addWidget(lema)
         texto_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        # Foto docente circular
+        # Foto docente
         foto_docente = QLabel()
-        foto_docente.setObjectName("fotoDocente")
-        pixmap_docente = crear_avatar_circular("src/icons/user.png", 80, borde=3, color_borde=QColor("white"))
-        if not pixmap_docente.isNull():
+        pixmap_docente = None
+        if self.usuario and self.usuario.get("foto"):
+            image = QImage.fromData(self.usuario["foto"])
+            pixmap = QPixmap.fromImage(image)
+            pixmap_docente = self._crear_avatar_desde_pixmap(pixmap, 80, 3, QColor("white"))
+        else:
+            pixmap_docente = crear_avatar_circular("src/icons/user.png", 80, borde=3, color_borde=QColor("white"))
+        if pixmap_docente and not pixmap_docente.isNull():
             foto_docente.setPixmap(pixmap_docente)
         foto_docente.setFixedSize(80, 80)
         foto_docente.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         btn_sesion = QPushButton("CERRAR SESIÓN")
         btn_sesion.setObjectName("btnSesion")
+        btn_sesion.clicked.connect(self.cerrar_sesion)
         btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
+        btn_info.clicked.connect(QApplication.quit)
 
         header_layout = QHBoxLayout()
         header_layout.addWidget(logo)
@@ -253,7 +249,9 @@ class InterfazAdministrativa(QWidget):
         header_layout.addStretch()
         header_layout.addWidget(btn_sesion)
         header_layout.addWidget(btn_info)
-        header_layout.addWidget(foto_docente)
+        docente_layout = QVBoxLayout()
+        docente_layout.addWidget(foto_docente)
+        header_layout.addLayout(docente_layout)
 
         separador = QFrame()
         separador.setFrameShape(QFrame.Shape.HLine)
@@ -267,7 +265,7 @@ class InterfazAdministrativa(QWidget):
         subtitulo.setObjectName("subtitulo")
         subtitulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # --- Botones con distribución original ---
+        # --- Botones ---
         acciones = [
             ("src/icons/ingreso.png", "Ingreso Estudiantes", "#2E7D32"),
             ("src/icons/salida.png", "Salida Estudiantes", "#2E7D32"),
@@ -283,7 +281,35 @@ class InterfazAdministrativa(QWidget):
         grid = QGridLayout()
         grid.setSpacing(25)
 
-        for i, (icono, texto, color) in enumerate(acciones):
+        # --- Detección robusta de administrador ---
+        # soporta: 'es_admin' (0/1, int or str), 'rol' ("admin"/"docente"), o ausencia
+        es_admin = False
+        u = self.usuario or {}
+        if "es_admin" in u and u["es_admin"] is not None:
+            try:
+                es_admin = bool(int(u["es_admin"]))
+            except Exception:
+                es_admin = bool(u["es_admin"])
+        elif "rol" in u and u["rol"] is not None:
+            try:
+                es_admin = str(u["rol"]).lower() == "admin"
+            except Exception:
+                es_admin = False
+        else:
+            # no info — asumimos no admin (seguro por defecto)
+            es_admin = False
+
+        # organize visible buttons only (omit disabled ones), laying out into grid
+        row, col = 0, 0
+        max_cols = 5
+
+        for icono, texto, color in acciones:
+            # acciones protegidas
+            if texto in ["Editar Estudiantes", "Registrar Estudiantes", "Registrar Docente", "Gestionar Equipos"]:
+                if not es_admin:
+                    # no incluimos el botón si no es admin
+                    continue
+
             btn = BotonTarjetaAvanzado(icono, texto, color)
             if texto == "Gestionar Equipos":
                 btn.clicked.connect(self.abrir_gestion_equipos)
@@ -293,8 +319,12 @@ class InterfazAdministrativa(QWidget):
                 btn.clicked.connect(self.abrir_registrar_docente)
             elif texto == "Registrar Estudiantes":
                 btn.clicked.connect(self.abrir_registrar_estudiantes)
-            # Distribución: primera fila 5, segunda fila 4
-            grid.addWidget(btn, i // 5, i % 5)
+
+            grid.addWidget(btn, row, col)
+            col += 1
+            if col >= max_cols:
+                col = 0
+                row += 1
 
         # --- Layout principal ---
         main_layout = QVBoxLayout()
@@ -308,6 +338,29 @@ class InterfazAdministrativa(QWidget):
         main_layout.addStretch()
 
         self.setLayout(main_layout)
+
+    def _crear_avatar_desde_pixmap(self, pixmap, tamaño=80, borde=3, color_borde=QColor("white")):
+        if pixmap.isNull():
+            return QPixmap()
+        pixmap = pixmap.scaled(
+            tamaño, tamaño,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        avatar = QPixmap(tamaño, tamaño)
+        avatar.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(avatar)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if borde > 0:
+            painter.setPen(QColor(color_borde))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(0, 0, tamaño - 1, tamaño - 1)
+        path = QPainterPath()
+        path.addEllipse(borde, borde, tamaño - 2 * borde, tamaño - 2 * borde)
+        painter.setClipPath(path)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.end()
+        return avatar
 
     # --- Métodos abrir ventanas ---
     def abrir_gestion_equipos(self):
@@ -330,10 +383,17 @@ class InterfazAdministrativa(QWidget):
         self.ventana_estudiante.showMaximized()
         self.close()
 
+    # --- Cerrar sesión ---
+    def cerrar_sesion(self):
+        from login import InicioSesionDocente
+        Sesion.cerrar_sesion()
+        self.login = InicioSesionDocente()
+        self.login.show()
+        self.close()
 
-# ==========================================================
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     ventana = InterfazAdministrativa()
-    ventana.showMaximized()  # 👈 Arranca maximizada
+    ventana.showMaximized()
     sys.exit(app.exec())

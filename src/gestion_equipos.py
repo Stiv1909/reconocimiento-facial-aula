@@ -8,10 +8,18 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt
 
 from modules.equipos import agregar_equipo, actualizar_estado, obtener_equipos, generar_proximo_codigo
+from modules.sesion import Sesion
+
 
 class GestionEquipos(QWidget):
     def __init__(self):
         super().__init__()
+
+        # 🔒 Verificar sesión iniciada
+        if not Sesion.esta_autenticado():
+            QMessageBox.critical(self, "Acceso denegado", "⚠ Debe iniciar sesión para acceder a Gestión de Equipos.")
+            sys.exit(0)
+
         self.setWindowTitle("Gestión de Equipos - Institución Educativa del Sur")
         self.resize(1250, 670)
         self.centrar_ventana()
@@ -53,7 +61,6 @@ class GestionEquipos(QWidget):
             QPushButton#btnAgregar:hover { background-color: rgba(21,101,192,0.75); }
         """)
         
-
         # ---------------------- HEADER ----------------------
         logo = QLabel()
         pixmap_logo = QPixmap("src/logo_institucion.jpeg")
@@ -79,6 +86,7 @@ class GestionEquipos(QWidget):
 
         btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
+        btn_info.clicked.connect(lambda: sys.exit(0))
 
         top_layout = QHBoxLayout()
         top_layout.addWidget(logo)
@@ -101,42 +109,25 @@ class GestionEquipos(QWidget):
         self.txt_codigo = QLineEdit()
         self.txt_codigo.setText(generar_proximo_codigo())
         self.txt_codigo.setReadOnly(True)
-        self.txt_codigo.setStyleSheet("""
-    QLineEdit {
-        background-color: #2A2A2A;  /* Gris oscuro */
-        color: white;
-    }
-""")
+        self.txt_codigo.setStyleSheet("background-color: #2A2A2A; color: white;")
 
         lbl_estado = QLabel("Estado:")
         self.cmb_estado = QComboBox()
         self.cmb_estado.addItems(["disponible", "dañado"])
         self.cmb_estado.setStyleSheet("""
-    QComboBox {
-        background-color: #2A2A2A;  /* Gris oscuro */
-        color: white;
-    }
-    QComboBox QAbstractItemView {
-        background-color: #2A2A2A;  /* Gris oscuro */
-        selection-background-color: #1976D2;
-        color: white;
-    }
-""")
+            QComboBox {
+                background-color: #2A2A2A;
+                color: white;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #2A2A2A;
+                selection-background-color: #1976D2;
+                color: white;
+            }
+        """)
 
         btn_agregar = QPushButton("Agregar")
         btn_agregar.setObjectName("btnAgregar")
-        btn_agregar.setStyleSheet("""
-            QPushButton#btnAgregar {
-                background-color: rgba(21,101,192,0.60);
-                border-radius: 6px;
-                font-weight: bold;
-                color: white;
-                padding: 6px 12px;
-            }
-            QPushButton#btnAgregar:hover {
-                background-color: rgba(21,101,192,0.75);
-            }
-        """)
         btn_agregar.clicked.connect(self.agregar_equipo_ui)
 
         agregar_layout = QHBoxLayout()
@@ -198,15 +189,11 @@ class GestionEquipos(QWidget):
 
     # ---------------------- FUNCIONES ----------------------
     def agregar_equipo_ui(self):
-        codigo = self.txt_codigo.text().strip()
         estado = self.cmb_estado.currentText()
-        if not codigo:
-            QMessageBox.warning(self, "Error", "⚠ Código vacío")
-            return
-        if agregar_equipo(codigo, estado):
+        if agregar_equipo(estado):
             self.cargar_equipos_ui()
             self.txt_codigo.setText(generar_proximo_codigo())
-            QMessageBox.information(self, "Éxito", f"Equipo {codigo} agregado correctamente")
+            QMessageBox.information(self, "Éxito", "Equipo agregado correctamente")
         else:
             QMessageBox.critical(self, "Error", "No se pudo agregar el equipo")
 
@@ -220,32 +207,17 @@ class GestionEquipos(QWidget):
             self.stack_resultados.setCurrentIndex(2)
 
         for fila, (codigo, estado_actual) in enumerate(equipos):
-            # Código centrado
             item_codigo = QTableWidgetItem(codigo)
             item_codigo.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tabla.setItem(fila, 0, item_codigo)
 
-            # Estado
             combo_estado = QComboBox()
             combo_estado.addItems(["disponible", "dañado"])
             combo_estado.setCurrentText(estado_actual)
             self.tabla.setCellWidget(fila, 1, combo_estado)
 
-            # Botón actualizar
             btn_actualizar = QPushButton("Actualizar")
             btn_actualizar.setObjectName("btnActualizar")
-            btn_actualizar.setStyleSheet("""
-                QPushButton#btnActualizar {
-                    background-color: rgba(21,101,192,0.60);
-                    border-radius: 6px;
-                    font-weight: bold;
-                    color: white;
-                    padding: 4px 10px;
-                }
-                QPushButton#btnActualizar:hover {
-                    background-color: rgba(21,101,192,0.75);
-                }
-            """)
             btn_actualizar.clicked.connect(lambda _, f=fila: self.actualizar_estado_ui(f))
             self.tabla.setCellWidget(fila, 2, btn_actualizar)
 
@@ -257,6 +229,10 @@ class GestionEquipos(QWidget):
         self.cargar_equipos_ui()
 
     def volver_menu(self):
+        if not Sesion.esta_autenticado():
+            QMessageBox.warning(self, "Sesión requerida", "⚠ Debe iniciar sesión para acceder al menú.")
+            return
+
         from menu import InterfazAdministrativa
         self.ventana_menu = InterfazAdministrativa()
         self.ventana_menu.showMaximized()
@@ -265,6 +241,11 @@ class GestionEquipos(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+
+    if not Sesion.esta_autenticado():
+        QMessageBox.critical(None, "Acceso denegado", "⚠ Debe iniciar sesión para usar esta ventana.")
+        sys.exit(0)
+
     ventana = GestionEquipos()
     ventana.show()
     sys.exit(app.exec())

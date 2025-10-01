@@ -8,11 +8,16 @@ from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import Qt, QTimer
 
 from modules.estudiantes import registrar_estudiante  
-
+from modules.sesion import Sesion
 
 class RegistroEstudiantes(QWidget):
     def __init__(self):
         super().__init__()
+        # ✅ Verificar sesión
+        if not Sesion.esta_autenticado():
+            QMessageBox.critical(self, "Acceso denegado", "⚠ Debe iniciar sesión para usar esta ventana.")
+            sys.exit(0)  # Cierra la app si no hay sesión activa
+
         self.setWindowTitle("Registro de Estudiantes - Institución Educativa del Sur")
 
         # Estado de cámara
