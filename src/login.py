@@ -199,7 +199,7 @@ class InicioSesionDocente(QWidget):
         # Mapear keys robustamente (dependen de cómo cargues docentes)
         d = self.docente_detectado
         usuario_data = {
-            "id": d.get("id_docente") or d.get("id") or d.get("cedula"),
+            "cedula": d.get("id_docente") or d.get("id") or d.get("cedula"),
             "nombres": d.get("nombres") or d.get("nombre"),
             "apellidos": d.get("apellidos") or d.get("apellido"),
             "rol": d.get("rol") or "docente",

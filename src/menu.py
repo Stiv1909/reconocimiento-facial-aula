@@ -1,13 +1,14 @@
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QGridLayout, QToolButton, QFrame, QGraphicsDropShadowEffect
+    QGridLayout, QToolButton, QFrame, QGraphicsDropShadowEffect, QInputDialog
 )
 from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter, QBrush, QLinearGradient, QPainterPath, QImage
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, pyqtProperty
 
 from modules.sesion import Sesion
 # Importa ventanas
+from ingreso_estudiantes import IngresoEstudiantes
 from editar_estudiante import EditarEstudiantes
 from gestion_equipos import GestionEquipos
 from registro_docente import RegistroDocente
@@ -311,7 +312,9 @@ class InterfazAdministrativa(QWidget):
                     continue
 
             btn = BotonTarjetaAvanzado(icono, texto, color)
-            if texto == "Gestionar Equipos":
+            if texto == "Ingreso Estudiantes":
+                btn.clicked.connect(self.abrir_ingreso_estudiantes)
+            elif texto == "Gestionar Equipos":
                 btn.clicked.connect(self.abrir_gestion_equipos)
             elif texto == "Editar Estudiantes":
                 btn.clicked.connect(self.abrir_editar_estudiantes)
@@ -319,6 +322,7 @@ class InterfazAdministrativa(QWidget):
                 btn.clicked.connect(self.abrir_registrar_docente)
             elif texto == "Registrar Estudiantes":
                 btn.clicked.connect(self.abrir_registrar_estudiantes)
+
 
             grid.addWidget(btn, row, col)
             col += 1
@@ -363,6 +367,14 @@ class InterfazAdministrativa(QWidget):
         return avatar
 
     # --- Métodos abrir ventanas ---
+    def abrir_ingreso_estudiantes(self):
+        grados = ["6-1","6-3","7-1", "8-1", "9-1", "10-1", "11-1"]
+        grado, ok = QInputDialog.getItem(self, "Seleccionar grado", "Seleccione el grado:", grados, 0, False)
+        if ok and grado:
+            self.ventana_equipos = IngresoEstudiantes(grado)
+            self.ventana_equipos.showMaximized()
+            self.close()
+
     def abrir_gestion_equipos(self):
         self.ventana_equipos = GestionEquipos()
         self.ventana_equipos.showMaximized()
