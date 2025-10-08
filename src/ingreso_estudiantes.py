@@ -12,6 +12,8 @@ import face_recognition
 # Importamos la lógica
 from modules.ingreso_logic import cargar_estudiantes, asignar_equipo, contar_equipos_ocupados
 from modules.sesion import Sesion
+from modules.hardware_checker import mostrar_chequeo_hardware
+
 
 # ---------------------------------------------------
 # Ventana principal - Salida estudiantes
@@ -26,7 +28,7 @@ class IngresoEstudiantes(QWidget):
         self.cap = cv2.VideoCapture(0)
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
-        self.timer.start(30)
+        
 
         # Contador de frames para optimizar reconocimiento
         self.frame_count = 0
@@ -45,10 +47,13 @@ class IngresoEstudiantes(QWidget):
             return
 
         # Estado persistente
-        self.nombres_actuales = [None, None]
         self.last_seen = {}
+        # --- Chequeo de hardware y capacidad de rostros ---
+        self.hardware_info = mostrar_chequeo_hardware()
+        self.max_faces = self.hardware_info["max_faces"]
 
         self.init_ui()
+        self.timer.start(30)
 
     def centrar_ventana(self, ancho, alto):
         screen = QApplication.primaryScreen().geometry()
@@ -133,14 +138,18 @@ class IngresoEstudiantes(QWidget):
         mensaje = QLabel("Por favor mirar la cámara para el registro")
         mensaje.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # --- Tarjetas ---
-        self.card_asig1 = self.crear_tarjeta("Asignamiento 1", "Equipo #---")
-        self.card_asig2 = self.crear_tarjeta("Asignamiento 2", "Equipo #---")
+        # --- Tarjetas Dinamicas---
+        self.cards = []
+        self.nombres_actuales = [None] * self.max_faces  # se adapta dinámicamente
 
         cards_layout = QHBoxLayout()
         cards_layout.addStretch()
-        cards_layout.addWidget(self.card_asig1)
-        cards_layout.addWidget(self.card_asig2)
+
+        for i in range(self.max_faces):
+            card = self.crear_tarjeta(f"Asignamiento {i + 1}", "Equipo #---")
+            self.cards.append(card)
+            cards_layout.addWidget(card)
+
         cards_layout.addStretch()
 
         # --- Contador ---
@@ -265,7 +274,7 @@ class IngresoEstudiantes(QWidget):
             small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
             rgb_small = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-            locations = face_recognition.face_locations(rgb_small, model="hog")[:2]
+            locations = face_recognition.face_locations(rgb_small, model="hog")[:self.max_faces]
             encodings = face_recognition.face_encodings(rgb_small, locations)
 
             for encoding in encodings:
@@ -289,12 +298,8 @@ class IngresoEstudiantes(QWidget):
             for i, nombre_tarjeta in enumerate(self.nombres_actuales):
                 if nombre_tarjeta is not None and nombre_tarjeta not in present:
                     self.nombres_actuales[i] = None  # liberar tarjeta
-                    if i == 0:
-                        self.card_asig1.lbl_titulo.setText("Asignamiento 1")
-                        self.card_asig1.lbl_valor.setText("Equipo #---")
-                    else:
-                        self.card_asig2.lbl_titulo.setText("Asignamiento 2")
-                        self.card_asig2.lbl_valor.setText("Equipo #---")
+                    self.cards[i].lbl_titulo.setText(f"Asignamiento {i + 1}")
+                    self.cards[i].lbl_valor.setText("Equipo #---")
 
             # --- Asignar nuevos rostros ---
             for nombre, id_est in nombres_en_frame:
@@ -309,12 +314,8 @@ class IngresoEstudiantes(QWidget):
                     cedula_doc = Sesion.obtener_usuario()["cedula"]
                     equipo = asignar_equipo(id_est)
 
-                    if idx == 0:
-                        self.card_asig1.lbl_titulo.setText(nombre)
-                        self.card_asig1.lbl_valor.setText(f"Equipo: {equipo}")
-                    else:
-                        self.card_asig2.lbl_titulo.setText(nombre)
-                        self.card_asig2.lbl_valor.setText(f"Equipo: {equipo}")
+                    self.cards[idx].lbl_titulo.setText(nombre)
+                    self.cards[idx].lbl_valor.setText(f"Equipo: {equipo}")
 
             # --- Actualizar contador ---
             ocupados = contar_equipos_ocupados()
@@ -322,6 +323,7 @@ class IngresoEstudiantes(QWidget):
 
 
     def closeEvent(self, event):
+        self.timer.stop()
         self.cap.release()
         super().closeEvent(event)
 
