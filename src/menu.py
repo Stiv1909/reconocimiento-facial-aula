@@ -1,7 +1,7 @@
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
-    QGridLayout, QToolButton, QFrame, QGraphicsDropShadowEffect, QInputDialog
+    QGridLayout, QToolButton, QFrame, QGraphicsDropShadowEffect, QInputDialog, QDialog
 )
 from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter, QBrush, QLinearGradient, QPainterPath, QImage
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, pyqtProperty
@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, pyqtProperty
 from modules.sesion import Sesion
 # Importa ventanas
 from ingreso_estudiantes import IngresoEstudiantes
+from salida_estudiantes import SalidaEstudiantes, SeleccionarGradoDialog
 from editar_estudiante import EditarEstudiantes
 from gestion_equipos import GestionEquipos
 from registro_docente import RegistroDocente
@@ -314,6 +315,8 @@ class InterfazAdministrativa(QWidget):
             btn = BotonTarjetaAvanzado(icono, texto, color)
             if texto == "Ingreso Estudiantes":
                 btn.clicked.connect(self.abrir_ingreso_estudiantes)
+            elif texto == "Salida Estudiantes":
+                btn.clicked.connect(self.abrir_salida_estudiantes)
             elif texto == "Gestionar Equipos":
                 btn.clicked.connect(self.abrir_gestion_equipos)
             elif texto == "Editar Estudiantes":
@@ -373,6 +376,16 @@ class InterfazAdministrativa(QWidget):
         if ok and grado:
             self.ventana_equipos = IngresoEstudiantes(grado)
             self.ventana_equipos.showMaximized()
+            self.close()
+
+    def abrir_salida_estudiantes(self):
+        grados = ["6-1","6-3","7-1", "8-1", "9-1", "10-1", "11-1"]
+        grado, ok = QInputDialog.getItem(self, "Seleccionar grado", "Seleccione el grado:", grados, 0, False)
+        if ok and grado:
+            self.ventana_salida = SalidaEstudiantes()
+            self.ventana_salida.selected_grade = grado  # Asignar el grado directamente
+            self.ventana_salida.on_cargar_grado()       # Cargar los datos del grado
+            self.ventana_salida.showMaximized()
             self.close()
 
     def abrir_gestion_equipos(self):
