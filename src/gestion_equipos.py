@@ -38,8 +38,8 @@ class GestionEquipos(QWidget):
             QLabel#tituloColegio { font-size: 36px; font-weight: bold; color: #E3F2FD; }
             QLabel#lemaColegio { font-size: 18px; color: #aaa; }
             QPushButton { border-radius: 6px; padding: 6px 12px; font-weight: bold; color: white; }
-            QPushButton#btnMenu { background-color: rgba(198,40,40,0.60); }
-            QPushButton#btnInfo { background-color: rgba(21,101,192,0.60); }
+            QPushButton#btnMenu { background-color: rgba(21,101,192,0.6); }
+            QPushButton#btnInfo { background-color: rgba(198,40,40,0.60); }
             QPushButton#btnAgregar { background-color: rgba(21,101,192,0.60); }
             QPushButton#btnActualizar { background-color: rgba(21,101,192,0.60); }
             QPushButton:hover { opacity: 0.85; }

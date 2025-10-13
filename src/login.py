@@ -105,8 +105,8 @@ class InicioSesionDocente(QWidget):
                 font-weight: bold;
                 color: white;
             }
-            QPushButton#btnInicio     { background-color: rgba(198,40,40,0.60); }
-            QPushButton#btnInfo       { background-color: rgba(21, 101, 192, 0.60); }
+            QPushButton#btnInicio     { background-color: rgba(21,101,192,0.6); }
+            QPushButton#btnInfo       { background-color: rgba(198,40,40,0.60); }
             QPushButton:hover         { opacity: 0.85; }
         """)
 

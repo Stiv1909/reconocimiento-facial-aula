@@ -200,8 +200,8 @@ class InterfazAdministrativa(QWidget):
             QLabel#nombreColegio { font-size: 36px; font-weight: bold; color: #E3F2FD; }
             QLabel#lemaColegio { font-size: 22px; color: #aaa; }
             QPushButton { border-radius: 6px; padding: 6px 12px; font-weight: bold; color: white; }
-            QPushButton#btnSesion { background-color: rgba(198,40,40,0.60); }
-            QPushButton#btnInfo { background-color: rgba(21, 101, 192,0.60); }
+            QPushButton#btnSesion { background-color: rgba(21, 101, 192,0.60); }
+            QPushButton#btnInfo { background-color: rgba(198,40,40,0.60); }
         """)
 
         # --- Encabezado ---

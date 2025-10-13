@@ -160,7 +160,7 @@ class SalidaEstudiantes(QWidget):
         separador.setFrameShape(QFrame.Shape.HLine)
         separador.setStyleSheet("color: #444;")
 
-        titulo = QLabel(f"Salida de Estudiantes - {self.selected_grade}")
+        titulo = QLabel(f"Salida de Estudiantes")
         titulo.setObjectName("titulo")
         titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         mensaje = QLabel("Mire hacia la cámara para registrar su salida.")
@@ -185,7 +185,7 @@ class SalidaEstudiantes(QWidget):
         self.lbl_camara.setFixedSize(800, 350)
         self.lbl_camara.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_camara.setStyleSheet("""
-            background-color: rgba(255,255,255,0.08);
+            background-color: rgba(0,0,139,0.5);
             border: 5px solid #1565C0;
             border-radius: 15px;
         """)
@@ -219,7 +219,7 @@ class SalidaEstudiantes(QWidget):
     def crear_tarjeta(self, titulo, valor):
         frame = QFrame()
         frame.setStyleSheet("""
-            QFrame { background-color: rgba(255,255,255,0.08);
+            QFrame { background-color: rgba(0,0,255,0.01);
                      border: 2px solid #1565C0; border-radius: 12px; padding: 6px; }
             QLabel { color: white; }
             QLabel#titulo { font-size: 16px; font-weight: bold; color: #E3F2FD; }

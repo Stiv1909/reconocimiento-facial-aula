@@ -89,8 +89,8 @@ class IngresoEstudiantes(QWidget):
                 font-weight: bold;
                 color: white;
             }
-            QPushButton#btnMenu     { background-color: rgba(198,40,40,0.60); }
-            QPushButton#btnInfo     { background-color: rgba(21, 101, 192, 0.60); }
+            QPushButton#btnMenu     { background-color: rgba(21,101,192,0.6); }
+            QPushButton#btnInfo     { background-color: rgba(198,40,40,0.60); }
             QPushButton#btnFinalizar{ background-color: rgba(21, 101, 192, 0.60); }
             QPushButton:hover       { opacity: 0.85; }
         """)
@@ -214,7 +214,7 @@ class IngresoEstudiantes(QWidget):
         frame = QFrame()
         frame.setStyleSheet("""
             QFrame {
-                background-color: rgba(255,255,255,0.08);
+                background-color: rgba(0,0,255,0.01);
                 border: 2px solid #1565C0;
                 border-radius: 12px;
             }

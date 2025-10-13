@@ -326,8 +326,8 @@ class EditarEstudiantes(QWidget):
         font-weight: bold;
         color: white;
     }
-    QPushButton#btnMenu { background-color: rgba(198,40,40,0.60); }
-    QPushButton#btnInfo { background-color: rgba(21, 101, 192, 0.60); }
+    QPushButton#btnMenu { background-color: rgba(21, 101, 192, 0.60); }
+    QPushButton#btnInfo { background-color: rgba(198,40,40,0.60); }
     QPushButton#btnBuscar { background-color: rgba(21, 101, 192, 0.60); font-size: 18px; }
     QPushButton#btnActualizar { background-color: rgba(21, 101, 192, 0.60); }
     QPushButton#btnRostro { background-color: rgba(198,40,40,0.60); }
