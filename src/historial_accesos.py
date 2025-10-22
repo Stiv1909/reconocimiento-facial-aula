@@ -1,0 +1,329 @@
+import sys
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QHBoxLayout,
+    QFrame, QComboBox, QTableWidget, QTableWidgetItem,
+    QAbstractItemView, QHeaderView, QDialog, QMessageBox, QStackedLayout, QGraphicsDropShadowEffect
+)
+from PyQt6.QtGui import QPixmap, QColor
+from PyQt6.QtCore import Qt
+
+# Si usas Sesion como en EditarEstudiantes, mantenlo
+from modules.sesion import Sesion
+
+
+class HistorialAccesos(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        # Mantengo la verificación de sesión igual que en EditarEstudiantes
+        if not Sesion.esta_autenticado():
+            QMessageBox.critical(self, "Acceso denegado", "❌ Debes iniciar sesión para acceder a esta ventana.")
+            self.close()
+            return
+
+        self.setWindowTitle("Historial de Accesos - Institución Educativa del Sur")
+        self.resize(1250, 670)
+        self.centrar_ventana()
+        self.init_ui()
+
+    def centrar_ventana(self):
+        screen = QApplication.primaryScreen().availableGeometry()
+        geom = self.frameGeometry()
+        geom.moveCenter(screen.center())
+        self.move(geom.topLeft())
+
+    def init_ui(self):
+        # Misma hoja de estilo que EditarEstudiantes (coherencia total)
+        self.setStyleSheet("""
+    QWidget {
+        background-color: #0D1B2A;
+        color: white;
+        font-family: Arial;
+        font-size: 14px;
+    }
+    QLabel#tituloColegio {
+        font-size: 36px;
+        font-weight: bold;
+        color: #E3F2FD;
+    }
+    QLabel#subColegio {
+        font-size: 18px;
+        color: #aaa;
+    }
+    QLabel#seccionTitulo {
+        font-size: 22px;
+        font-weight: bold;
+        color: #E3F2FD;
+        margin: 10px 0;
+    }
+    QPushButton {
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-weight: bold;
+        color: white;
+    }
+    QPushButton#btnMenu { background-color: rgba(21, 101, 192, 0.60); }
+    QPushButton#btnInfo { background-color: rgba(198,40,40,0.60); }
+    QPushButton#btnBuscar { background-color: rgba(21, 101, 192, 0.60); font-size: 18px; min-width:44px; min-height:44px; border-radius:22px; }
+    QPushButton:hover { opacity: 0.85; }
+    QLineEdit, QComboBox {
+        border: 1px solid #1565C0;
+        border-radius: 5px;
+        padding: 6px;
+        background-color: #2A2A2A;
+        color: white;
+    }
+    QTableWidget {
+        border: none;
+        border-radius: 10px;
+        background-color: #1E293B;
+        alternate-background-color: #243447;
+        gridline-color: transparent;
+        selection-background-color: #1976D2;
+        selection-color: white;
+        font-size: 14px;
+    }
+    QHeaderView::section {
+        background-color: rgba(13, 71, 161, 0.8);
+        color: white;
+        font-size: 15px;
+        font-weight: bold;
+        border: none;
+        padding: 10px;
+        border-radius: 6px;
+    }
+    QTableWidget::item {
+        padding: 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    QTableWidget::item:hover {
+        background-color: rgba(25,118,210,0.3);
+        color: #E3F2FD;
+    }
+""")
+
+        # -------- Header (igual formato que EditarEstudiantes) --------
+        logo = QLabel()
+        pixmap_logo = QPixmap("src/logo_institucion.jpeg")
+        if not pixmap_logo.isNull():
+            pixmap_logo = pixmap_logo.scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatio,
+                                             Qt.TransformationMode.SmoothTransformation)
+            logo.setPixmap(pixmap_logo)
+        else:
+            logo.setText("Logo no encontrado")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        titulo_colegio = QLabel(
+            "<div style='text-align:left;'>"
+            "<p style='font-size:32px; font-weight:bold; color:#E3F2FD; margin:0;'>Institución Educativa del Sur</p>"
+            "<p style='font-size:18px; color:#aaa; margin:0;'>Compromiso y Superación</p>"
+            "</div>"
+        )
+        titulo_colegio.setObjectName("tituloColegio")
+        titulo_colegio.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+
+        btn_menu = QPushButton("MENÚ")
+        btn_menu.setObjectName("btnMenu")
+        # btn_menu.clicked.connect(self.volver_menu)   # conecta como en tu app si lo necesitas
+
+        btn_info = QPushButton("MÁS INFORMACIÓN")
+        btn_info.setObjectName("btnInfo")
+
+        top_layout = QHBoxLayout()
+        top_layout.addWidget(logo)
+        top_layout.addWidget(titulo_colegio)
+        top_layout.addStretch()
+        top_layout.addWidget(btn_menu)
+        top_layout.addWidget(btn_info)
+
+        separador = QFrame()
+        separador.setFrameShape(QFrame.Shape.HLine)
+        separador.setStyleSheet("color: #444;")
+
+        # -------- Sección: Consultar Historial --------
+        seccion_titulo = QLabel("Consultar Historial")
+        seccion_titulo.setObjectName("seccionTitulo")
+        seccion_titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Tarjeta contenedora con sombra (misma estética)
+        tarjeta = QFrame()
+        tarjeta.setStyleSheet("background-color: #111827; border-radius: 12px;")
+        sombra = QGraphicsDropShadowEffect()
+        sombra.setBlurRadius(26)
+        sombra.setColor(QColor(0, 0, 0, 180))
+        sombra.setOffset(0, 6)
+        tarjeta.setGraphicsEffect(sombra)
+
+        tarjeta_layout = QVBoxLayout(tarjeta)
+        tarjeta_layout.setContentsMargins(18, 18, 18, 18)
+        tarjeta_layout.setSpacing(12)
+
+        # --- Filtros mejorados visualmente ---
+        filtros_container = QFrame()
+        filtros_container.setStyleSheet("background-color: #0F172A; border-radius: 10px;")
+        filtros_layout = QVBoxLayout(filtros_container)
+        filtros_layout.setContentsMargins(20, 15, 20, 15)
+        filtros_layout.setSpacing(12)
+
+        # --- Fila 1: Estudiante y Grado ---
+        fila1 = QHBoxLayout()
+        fila1.setSpacing(15)
+
+        lbl_est = QLabel("👤 Estudiante:")
+        lbl_est.setStyleSheet("color: #E3F2FD; font-weight: bold;")
+        self.txt_estudiante = QLineEdit()
+        self.txt_estudiante.setPlaceholderText("Ingrese nombre o apellido del estudiante...")
+
+        lbl_grado = QLabel("🏫 Grado:")
+        lbl_grado.setStyleSheet("color: #E3F2FD; font-weight: bold;")
+        self.cmb_grado = QComboBox()
+        self.cmb_grado.addItems([
+            "", "6-1", "6-2", "6-3", "6-4",
+            "7-1", "7-2", "7-3", "7-4",
+            "8-1", "8-2", "8-3",
+            "9-1", "9-2", "9-3",
+            "10-1", "10-2", "10-3",
+            "11-1", "11-2", "11-3"
+        ])
+        self.cmb_grado.setFixedWidth(120)
+
+        fila1.addWidget(lbl_est)
+        fila1.addWidget(self.txt_estudiante, 2)
+        fila1.addWidget(lbl_grado)
+        fila1.addWidget(self.cmb_grado, 1)
+        fila1.addStretch()
+
+        # --- Fila 2: Fecha,  Equipo y Estado ---
+        fila2 = QHBoxLayout()
+        fila2.setSpacing(15)
+
+        lbl_fecha = QLabel("📅 Fecha:")
+        lbl_fecha.setStyleSheet("color: #E3F2FD; font-weight: bold;")
+        self.txt_fecha = QLineEdit()
+        self.txt_fecha.setPlaceholderText("DD/MM/AAAA")
+        self.txt_fecha.setFixedWidth(160)
+
+        lbl_equipo = QLabel("💻 Equipo:")
+        lbl_equipo.setStyleSheet("color: #E3F2FD; font-weight: bold;")
+        self.cmb_equipo = QComboBox()
+        self.cmb_equipo.addItems(["", "E-26", "E-27", "E-28", "E-29", "E-30"])
+        self.cmb_equipo.setFixedWidth(120)
+
+        lbl_estado = QLabel("🧍 Estado:")
+        lbl_estado.setStyleSheet("color: #E3F2FD; font-weight: bold;")
+        self.cmb_estado = QComboBox()
+        self.cmb_estado.addItems(["", "Estudiante","Ex-alumno"])
+        self.cmb_estado.setFixedWidth(180)
+
+        self.btn_buscar = QPushButton("🔍 Buscar")
+        self.btn_buscar.setObjectName("btnBuscar")
+        self.btn_buscar.setFixedHeight(48)
+        self.btn_buscar.setStyleSheet("""
+            QPushButton#btnBuscar {
+                background-color: rgba(21, 101, 192, 0.8);
+                border-radius: 8px;
+                font-size: 18px;
+                padding: 10px 20px;
+            }
+        """)
+        self.btn_buscar.clicked.connect(self.buscar_historial_ui)
+
+        fila2.addWidget(lbl_fecha)
+        fila2.addWidget(self.txt_fecha)
+        fila2.addStretch()
+        fila2.addWidget(lbl_equipo)
+        fila2.addWidget(self.cmb_equipo)
+        fila2.addStretch()
+        fila2.addWidget(lbl_estado)
+        fila2.addWidget(self.cmb_estado)
+        fila2.addStretch()
+        fila2.addWidget(self.btn_buscar)
+        fila2.addStretch()
+
+        # Agregar las filas al layout del contenedor de filtros
+        filtros_layout.addLayout(fila1)
+        filtros_layout.addLayout(fila2)
+
+        tarjeta_layout.addWidget(filtros_container)
+
+        # --- Área de historial: título + stack (mensaje inicial / tabla / no results) ---
+        titulo_tabla = QLabel("Historial")
+        titulo_tabla.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        titulo_tabla.setStyleSheet("font-size:16px; font-weight:bold; color:#E3F2FD; margin-top:6px;")
+
+        # Tabla con columnas EXACTAS de la maqueta
+        self.tabla = QTableWidget()
+        self.tabla.setColumnCount(7)
+        self.tabla.setHorizontalHeaderLabels([
+            "Estudiante", "Grado", "Equipo", "Fecha", "Hora-Inicio", "Hora - Fin", "Incidente"
+        ])
+        self.tabla.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.tabla.setAlternatingRowColors(True)
+        self.tabla.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.tabla.setShowGrid(False)
+        self.tabla.verticalHeader().setVisible(False)
+        self.tabla.setStyleSheet("QTableWidget { background-color: #1E293B; }")
+
+        lbl_inicial = QLabel("Realiza una búsqueda para mostrar resultados")
+        lbl_inicial.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_inicial.setStyleSheet("font-size:16px; color:#aaa;")
+
+        lbl_no = QLabel("No se encontraron registros")
+        lbl_no.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_no.setStyleSheet("font-size:16px; color:#aaa;")
+
+        self.stack = QStackedLayout()
+        self.stack.addWidget(lbl_inicial)   # 0
+        self.stack.addWidget(self.tabla)    # 1
+        self.stack.addWidget(lbl_no)        # 2
+        self.stack.setCurrentIndex(0)
+
+        tarjeta_layout.addWidget(titulo_tabla)
+        tarjeta_layout.addLayout(self.stack)
+
+        # -------- Main layout (encabezado + separador + sección) --------
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(18, 18, 18, 18)
+        main_layout.setSpacing(12)
+        main_layout.addLayout(top_layout)
+        main_layout.addWidget(separador)
+        main_layout.addWidget(seccion_titulo)
+        main_layout.addWidget(tarjeta)
+
+    # Placeholder visual — conecta con tu lógica real
+    def buscar_historial_ui(self):
+        """
+        Reemplaza esta función por la llamada real a la lógica/BD que retorne
+        una lista de filas con 7 columnas:
+        [Estudiante, Grado, Equipo, Fecha, Hora-Inicio, Hora-Fin, Incidente]
+        """
+        # ejemplo temporal (solo visual)
+        resultados_demo = [
+            ["Juan Pérez", "9-1", "E-26", "21/10/2025", "08:00", "09:30", "Sin novedad"],
+            ["Ana Gómez", "9-1", "E-27", "21/10/2025", "09:45", "11:00", "Retraso"],
+        ]
+
+        if not resultados_demo:
+            self.stack.setCurrentIndex(2)
+            self.tabla.setRowCount(0)
+            return
+
+        self.stack.setCurrentIndex(1)
+        self.tabla.setRowCount(0)
+        for fila in resultados_demo:
+            row = self.tabla.rowCount()
+            self.tabla.insertRow(row)
+            for col, valor in enumerate(fila):
+                self.tabla.setItem(row, col, QTableWidgetItem(valor))
+
+
+# Ejecutar solo en modo standalone (igual patrón de EditarEstudiantes)
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    # controlar sesión exactamente igual que EditarEstudiantes
+    if Sesion.esta_autenticado():
+        w = HistorialAccesos()
+        w.showMaximized()
+    else:
+        QMessageBox.warning(None, "Sesión requerida", "⚠ Debes iniciar sesión para acceder al sistema.")
+    sys.exit(app.exec())

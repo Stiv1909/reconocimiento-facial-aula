@@ -14,6 +14,7 @@ from editar_estudiante import EditarEstudiantes
 from gestion_equipos import GestionEquipos
 from registro_docente import RegistroDocente
 from registro_estudiante import RegistroEstudiantes
+from historial_accesos import HistorialAccesos
 
 
 # --- Función utilitaria: crear avatar circular ---
@@ -325,6 +326,8 @@ class InterfazAdministrativa(QWidget):
                 btn.clicked.connect(self.abrir_registrar_docente)
             elif texto == "Registrar Estudiantes":
                 btn.clicked.connect(self.abrir_registrar_estudiantes)
+            elif texto == "Historial de Accesos":
+                btn.clicked.connect(self.abrir_historial_accesos)
 
 
             grid.addWidget(btn, row, col)
@@ -406,6 +409,11 @@ class InterfazAdministrativa(QWidget):
     def abrir_registrar_estudiantes(self):
         self.ventana_estudiante = RegistroEstudiantes()
         self.ventana_estudiante.showMaximized()
+        self.close()
+    
+    def abrir_historial_accesos(self):
+        self.ventana_historial = HistorialAccesos()
+        self.ventana_historial.showMaximized()
         self.close()
 
     # --- Cerrar sesión ---
