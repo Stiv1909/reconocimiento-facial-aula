@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QPixmap, QColor
 from PyQt6.QtCore import Qt
-
+from modules.historial_logic import buscar_historial
 # Si usas Sesion como en EditarEstudiantes, mantenlo
 from modules.sesion import Sesion
 
@@ -124,10 +124,11 @@ class HistorialAccesos(QWidget):
 
         btn_menu = QPushButton("MENÚ")
         btn_menu.setObjectName("btnMenu")
-        # btn_menu.clicked.connect(self.volver_menu)   # conecta como en tu app si lo necesitas
+        btn_menu.clicked.connect(self.volver_menu)   # conecta como en tu app si lo necesitas
 
-        btn_info = QPushButton("MÁS INFORMACIÓN")
+        btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
+        btn_info.clicked.connect(lambda: sys.exit(0))
 
         top_layout = QHBoxLayout()
         top_layout.addWidget(logo)
@@ -292,30 +293,37 @@ class HistorialAccesos(QWidget):
 
     # Placeholder visual — conecta con tu lógica real
     def buscar_historial_ui(self):
-        """
-        Reemplaza esta función por la llamada real a la lógica/BD que retorne
-        una lista de filas con 7 columnas:
-        [Estudiante, Grado, Equipo, Fecha, Hora-Inicio, Hora-Fin, Incidente]
-        """
-        # ejemplo temporal (solo visual)
-        resultados_demo = [
-            ["Juan Pérez", "9-1", "E-26", "21/10/2025", "08:00", "09:30", "Sin novedad"],
-            ["Ana Gómez", "9-1", "E-27", "21/10/2025", "09:45", "11:00", "Retraso"],
-        ]
+        nombre = self.txt_estudiante.text().strip()
+        grado = self.cmb_grado.currentText().strip()
+        fecha = self.txt_fecha.text().strip()
+        equipo = self.cmb_equipo.currentText().strip()
+        estado = self.cmb_estado.currentText().strip()
 
-        if not resultados_demo:
+        resultados = buscar_historial(nombre, grado, fecha, equipo, estado)
+
+        if not resultados:
             self.stack.setCurrentIndex(2)
             self.tabla.setRowCount(0)
             return
 
         self.stack.setCurrentIndex(1)
         self.tabla.setRowCount(0)
-        for fila in resultados_demo:
+
+        for fila in resultados:
             row = self.tabla.rowCount()
             self.tabla.insertRow(row)
             for col, valor in enumerate(fila):
-                self.tabla.setItem(row, col, QTableWidgetItem(valor))
+                self.tabla.setItem(row, col, QTableWidgetItem(str(valor)))
 
+    def volver_menu(self):
+        if not Sesion.esta_autenticado():
+            QMessageBox.warning(self, "Sesión requerida", "⚠ Debe iniciar sesión para acceder al menú.")
+            return
+
+        from menu import InterfazAdministrativa
+        self.ventana_menu = InterfazAdministrativa()
+        self.ventana_menu.showMaximized()
+        self.close()
 
 # Ejecutar solo en modo standalone (igual patrón de EditarEstudiantes)
 if __name__ == "__main__":
