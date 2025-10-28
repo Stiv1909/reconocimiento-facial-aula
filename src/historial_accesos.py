@@ -22,7 +22,7 @@ class HistorialAccesos(QWidget):
             return
 
         self.setWindowTitle("Historial de Accesos - Institución Educativa del Sur")
-        self.resize(1250, 670)
+        self.showFullScreen()
         self.centrar_ventana()
         self.init_ui()
 
@@ -33,7 +33,6 @@ class HistorialAccesos(QWidget):
         self.move(geom.topLeft())
 
     def init_ui(self):
-        # Misma hoja de estilo que EditarEstudiantes (coherencia total)
         self.setStyleSheet("""
     QWidget {
         background-color: #0D1B2A;
@@ -102,7 +101,6 @@ class HistorialAccesos(QWidget):
     }
 """)
 
-        # -------- Header (igual formato que EditarEstudiantes) --------
         logo = QLabel()
         pixmap_logo = QPixmap("src/logo_institucion.jpeg")
         if not pixmap_logo.isNull():
