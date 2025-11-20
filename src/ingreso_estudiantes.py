@@ -16,7 +16,7 @@ from modules.hardware_checker import mostrar_chequeo_hardware
 
 
 # ---------------------------------------------------
-# Ventana principal - Salida estudiantes
+# Ventana principal - Ingreso estudiantes
 # ---------------------------------------------------
 class IngresoEstudiantes(QWidget):
     def __init__(self, grado):
@@ -28,7 +28,6 @@ class IngresoEstudiantes(QWidget):
         self.cap = cv2.VideoCapture(0)
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
-        
 
         # Contador de frames para optimizar reconocimiento
         self.frame_count = 0
@@ -38,7 +37,7 @@ class IngresoEstudiantes(QWidget):
             .scaled(800, 350, Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation)
 
-        # Cargamos estudiantes de ese grado desde la BD
+        # Cargamos estudiantes de ese grado desde la BD (ahora con variantes)
         self.estudiantes_conocidos = cargar_estudiantes(grado)
 
         if not self.estudiantes_conocidos:
@@ -48,6 +47,7 @@ class IngresoEstudiantes(QWidget):
 
         # Estado persistente
         self.last_seen = {}
+
         # --- Chequeo de hardware y capacidad de rostros ---
         self.hardware_info = mostrar_chequeo_hardware()
         self.max_faces = self.hardware_info["max_faces"]
@@ -250,6 +250,9 @@ class IngresoEstudiantes(QWidget):
         frame.lbl_titulo = lbl_titulo
         return frame
 
+    # ---------------------------------------------------
+    # Actualización de cámara y reconocimiento facial
+    # ---------------------------------------------------
     def update_frame(self):
         ret, frame = self.cap.read()
         if not ret:
@@ -275,23 +278,22 @@ class IngresoEstudiantes(QWidget):
             rgb_small = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
             locations = face_recognition.face_locations(rgb_small, model="hog")[:self.max_faces]
-            encodings = face_recognition.face_encodings(rgb_small, locations)
+            encodings_frame = face_recognition.face_encodings(rgb_small, locations)
 
-            for encoding in encodings:
-                matches = face_recognition.compare_faces(
-                    [est["encoding"] for est in self.estudiantes_conocidos],
-                    encoding,
-                    tolerance=0.5
-                )
-                if True in matches:
-                    idx = matches.index(True)
-                    nombre = self.estudiantes_conocidos[idx]["nombre"]
-                    id_est = self.estudiantes_conocidos[idx]["id"]
+            for encoding in encodings_frame:
+                match_found = False
+                for est in self.estudiantes_conocidos:
+                    for est_enc in est["encodings"]:  # usamos todas las variantes
+                        if face_recognition.compare_faces([est_enc], encoding, tolerance=0.40)[0]:
+                            nombre = est["nombre"]
+                            id_est = est["id"]
+                            if nombre not in [n for n, _ in nombres_en_frame]:
+                                nombres_en_frame.append((nombre, id_est))
+                            match_found = True
+                            break
+                    if match_found:
+                        break
 
-                    if nombre not in nombres_en_frame:
-                        nombres_en_frame.append((nombre, id_est))
-
-            current_time = time.time()
             present = set(n for n, _ in nombres_en_frame)
 
             # --- Liberar tarjetas cuyos nombres ya no están en cámara ---
@@ -304,14 +306,13 @@ class IngresoEstudiantes(QWidget):
             # --- Asignar nuevos rostros ---
             for nombre, id_est in nombres_en_frame:
                 if nombre in self.nombres_actuales:
-                    continue  # ya está asignado, no actualizar
+                    continue  # ya está asignado
 
                 if None in self.nombres_actuales:
                     idx = self.nombres_actuales.index(None)
                     self.nombres_actuales[idx] = nombre
 
                     # Asignar equipo en BD
-                    cedula_doc = Sesion.obtener_usuario()["cedula"]
                     equipo = asignar_equipo(id_est)
 
                     self.cards[idx].lbl_titulo.setText(nombre)
@@ -320,7 +321,6 @@ class IngresoEstudiantes(QWidget):
             # --- Actualizar contador ---
             ocupados = contar_equipos_ocupados()
             self.lbl_contador.setText(f"Equipos asignados: {ocupados}")
-
 
     def closeEvent(self, event):
         self.timer.stop()

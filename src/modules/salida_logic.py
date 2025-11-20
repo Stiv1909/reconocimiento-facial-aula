@@ -55,7 +55,7 @@ def cargar_estudiantes():
 # ----------------------------------------------------
 # Buscar estudiantes reconocidos en el frame
 # ----------------------------------------------------
-def buscar_estudiantes_en_frame(frame, estudiantes_conocidos, max_faces=2, tolerance=0.5):
+def buscar_estudiantes_en_frame(frame, estudiantes_conocidos, max_faces=2, tolerance=0.40):
     if not estudiantes_conocidos:
         return []
 

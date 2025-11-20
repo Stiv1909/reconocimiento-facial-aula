@@ -376,7 +376,7 @@ class InterfazAdministrativa(QWidget):
 
     # --- Métodos abrir ventanas ---
     def abrir_ingreso_estudiantes(self):
-        grados = ["6-1","6-3","7-1", "8-1", "9-1", "10-1", "11-1"]
+        grados = ["6-1","6-3","7-1", "7-3", "8-1", "9-1", "10-1", "11-1"]
         grado, ok = QInputDialog.getItem(self, "Seleccionar grado", "Seleccione el grado:", grados, 0, False)
         if ok and grado:
             self.ventana_equipos = IngresoEstudiantes(grado)
@@ -384,7 +384,7 @@ class InterfazAdministrativa(QWidget):
             self.close()
 
     def abrir_salida_estudiantes(self):
-        grados = ["6-1","6-3","7-1", "8-1", "9-1", "10-1", "11-1"]
+        grados = ["6-1","6-3","7-1","7-3","8-1", "9-1", "10-1", "11-1"]
         grado, ok = QInputDialog.getItem(self, "Seleccionar grado", "Seleccione el grado:", grados, 0, False)
         if ok and grado:
             self.ventana_salida = SalidaEstudiantes()
