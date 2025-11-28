@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt, QTimer
 from modules.docentes import registrar_docente
 
 from modules.sesion import Sesion
+from modules.validaciones import existe_docente_admin
 
 
 
@@ -19,9 +20,23 @@ class RegistroDocente(QWidget):
         super().__init__()
 
         # ✅ Verificar sesión
+        # 🔥 Permitir entrar sin sesión SOLO si no existe un admin registrado
         if not Sesion.esta_autenticado():
-            QMessageBox.critical(self, "Acceso denegado", "⚠ Debe iniciar sesión para usar esta ventana.")
-            sys.exit(0)  # Cierra la app si no hay sesión activa
+            if not existe_docente_admin():
+                # No hay admin → permitir registro inicial
+                QMessageBox.information(
+                    self,
+                    "Registro inicial",
+                    "No existe un docente administrador. Registre un administrador para iniciar el sistema."
+                )
+            else:
+                # Ya hay admin → bloquear acceso sin sesión
+                QMessageBox.critical(
+                    self,
+                    "Acceso denegado",
+                    "⚠ Debe iniciar sesión para registrar más docentes."
+                )
+                sys.exit(0)
 
         self.setWindowTitle("Registro de Docentes - Institución Educativa del Sur")
         self.centrar_ventana(1250, 670)
@@ -115,12 +130,13 @@ class RegistroDocente(QWidget):
         text_layout.addWidget(nombre)
         text_layout.addWidget(lema)
 
-        btn_menu = QPushButton("MENÚ")
+        btn_menu = QPushButton("CERRAR SESIÓN")
         btn_menu.setObjectName("btnMenu")
         btn_menu.clicked.connect(self.volver_menu)
 
         btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
+        btn_info.clicked.connect(self.close)
 
         header = QHBoxLayout()
         header.addWidget(logo)
@@ -287,9 +303,9 @@ class RegistroDocente(QWidget):
             QMessageBox.critical(self, "Error", "No se pudo registrar el docente")
 
     def volver_menu(self):
-        from menu import InterfazAdministrativa
+        from login import InicioSesionDocente
         self.cap.release()
-        self.ventana_menu = InterfazAdministrativa()
+        self.ventana_menu = InicioSesionDocente()
         self.ventana_menu.showMaximized()
         self.close()
 

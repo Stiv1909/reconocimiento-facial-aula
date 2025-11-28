@@ -1,6 +1,5 @@
-from mysql.connector import Error
+import pymysql
 from modules.conexion import crear_conexion, cerrar_conexion
-
 
 def buscar_historial(nombre_estudiante="", grado="", fecha="", equipo="", estado=""):
     """
@@ -18,17 +17,18 @@ def buscar_historial(nombre_estudiante="", grado="", fecha="", equipo="", estado
             print("❌ No se pudo establecer la conexión con la base de datos.")
             return []
 
-        cursor = conexion.cursor()
+        # Usar DictCursor para acceder a los campos por nombre
+        cursor = conexion.cursor(pymysql.cursors.DictCursor)
 
-        # 🔹 Consulta base con los JOIN necesarios
+        # Consulta base
         query = """
             SELECT 
                 CONCAT(e.nombres, ' ', e.apellidos) AS estudiante,
                 m.grado,
                 h.id_equipo,
-                DATE_FORMAT(h.fecha, '%d/%m/%Y') AS fecha,
-                TIME_FORMAT(h.hora_inicio, '%H:%i') AS hora_inicio,
-                TIME_FORMAT(h.hora_fin, '%H:%i') AS hora_fin,
+                DATE_FORMAT(h.fecha, '%%d/%%m/%%Y') AS fecha,
+                TIME_FORMAT(h.hora_inicio, '%%H:%%i') AS hora_inicio,
+                TIME_FORMAT(h.hora_fin, '%%H:%%i') AS hora_fin,
                 COALESCE(i.descripcion, 'Sin novedad') AS incidente
             FROM historial h
             JOIN matriculas m ON h.id_matricula = m.id_matricula
@@ -43,7 +43,7 @@ def buscar_historial(nombre_estudiante="", grado="", fecha="", equipo="", estado
         filtros = []
         valores = []
 
-        # 🔹 Filtros dinámicos según los valores recibidos
+        # Filtros dinámicos
         if nombre_estudiante.strip():
             filtros.append("(e.nombres LIKE %s OR e.apellidos LIKE %s)")
             valores.extend([f"%{nombre_estudiante}%", f"%{nombre_estudiante}%"])
@@ -64,19 +64,30 @@ def buscar_historial(nombre_estudiante="", grado="", fecha="", equipo="", estado
             filtros.append("m.estado = %s")
             valores.append(estado)
 
-        # 🔹 Unir los filtros al query si existen
+        # Unir filtros al query
         if filtros:
             query += " AND " + " AND ".join(filtros)
 
         query += " ORDER BY h.fecha DESC, h.hora_inicio ASC;"
 
-        # 🔹 Ejecutar consulta
+        # Ejecutar consulta
         cursor.execute(query, valores)
-        resultados = cursor.fetchall()
+        resultados = cursor.fetchall()  # Devuelve lista de diccionarios
 
-        return resultados
+        return [
+    [
+        row["estudiante"],
+        row["grado"],
+        row["id_equipo"],
+        row["fecha"],
+        row["hora_inicio"],
+        row["hora_fin"],
+        row["incidente"]
+    ]
+    for row in resultados
+]
 
-    except Error as e:
+    except pymysql.Error as e:
         print(f"⚠ Error al consultar el historial: {e}")
         return []
 

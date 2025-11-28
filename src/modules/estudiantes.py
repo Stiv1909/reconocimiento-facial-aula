@@ -1,30 +1,26 @@
 from modules.conexion import crear_conexion, cerrar_conexion
 from datetime import datetime
+import pymysql.cursors
 
 
 # ----------------------------------------------------------
 #  Utilidad: Generar id_estudiante
-#  Formato: AÑO + grado_num(2) + grupo + consecutivo(2)
-#  Ej: 2025 + 6-1 -> prefijo_grado="061" -> 202506101
 # ----------------------------------------------------------
 def generar_id_estudiante(anio, grado):
     conexion = crear_conexion()
-    cursor = conexion.cursor()
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
     try:
-        # Parsear grado: "6-1" -> num="6", grupo="1"
         num, grupo = grado.split("-")
         prefijo_grado = f"{int(num):02d}{grupo}"   # "061"
 
-        # Contar cuántas matrículas (o inscripciones) hay en ese año+grado
-        cursor.execute("SELECT COUNT(*) FROM matriculas WHERE anio = %s AND grado = %s", (anio, grado))
-        total = cursor.fetchone()[0] or 0
+        cursor.execute("SELECT COUNT(*) AS total FROM matriculas WHERE anio = %s AND grado = %s", (anio, grado))
+        total = cursor.fetchone()["total"] or 0
         consecutivo = total + 1
 
-        # Construir id inicial y asegurar unicidad frente a estudiantes existentes
         while True:
             id_est = f"{anio}{prefijo_grado}{consecutivo:02d}"
-            cursor.execute("SELECT COUNT(*) FROM estudiantes WHERE id_estudiante = %s", (id_est,))
-            existe = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) AS existe FROM estudiantes WHERE id_estudiante = %s", (id_est,))
+            existe = cursor.fetchone()["existe"]
             if existe:
                 consecutivo += 1
             else:
@@ -40,30 +36,21 @@ def generar_id_estudiante(anio, grado):
 #   ESTUDIANTES (datos personales)
 # ==========================================================
 def registrar_estudiante(nombre, apellido, grado, foto_bytes=None, anio=None):
-    """
-    Registra un estudiante nuevo:
-      - genera id_estudiante según año+grado+consecutivo
-      - inserta en tabla estudiantes
-      - agrega la primera matrícula (estado 'Estudiante')
-    """
     conexion, cursor = None, None
     try:
         if anio is None:
             anio = datetime.now().year
 
-        # Generar id_estudiante
         id_estudiante = generar_id_estudiante(anio, grado)
 
         conexion = crear_conexion()
-        cursor = conexion.cursor()
+        cursor = conexion.cursor(pymysql.cursors.DictCursor)
 
-        # Insertar estudiante (datos personales)
         sql = """INSERT INTO estudiantes (id_estudiante, nombres, apellidos, foto_rostro)
                  VALUES (%s, %s, %s, %s)"""
         cursor.execute(sql, (id_estudiante, nombre, apellido, foto_bytes))
         conexion.commit()
 
-        # Insertar la matrícula inicial
         registrar_matricula(id_estudiante, grado, anio, estado="Estudiante")
 
         print(f"✅ Estudiante {nombre} {apellido} registrado con ID {id_estudiante}")
@@ -82,12 +69,8 @@ def registrar_estudiante(nombre, apellido, grado, foto_bytes=None, anio=None):
 
 
 def buscar_estudiantes(nombre="", grado="", estado="", anio=None):
-    """
-    Devuelve estudiantes junto a su ÚLTIMA matrícula (si existe).
-    Los filtros grado/estado/anio aplican sobre la última matrícula.
-    """
     conexion = crear_conexion()
-    cursor = conexion.cursor(dictionary=True)
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
 
     sql = """
         SELECT e.id_estudiante, e.nombres, e.apellidos,
@@ -130,24 +113,17 @@ def buscar_estudiantes(nombre="", grado="", estado="", anio=None):
 
 
 def actualizar_datos(id_estudiante, nombre, apellido, grado=None, estado=None):
-    """
-    Actualiza datos personales. 
-    Si cambia grado o estado respecto a la última matrícula,
-    se inserta una NUEVA matrícula (ej: -02, -03, ...).
-    """
     conexion, cursor = None, None
     try:
         conexion = crear_conexion()
-        cursor = conexion.cursor()
+        cursor = conexion.cursor(pymysql.cursors.DictCursor)
 
-        # 1) Actualizar datos personales
         sql_update = """UPDATE estudiantes
                         SET nombres = %s, apellidos = %s
                         WHERE id_estudiante = %s"""
         cursor.execute(sql_update, (nombre, apellido, id_estudiante))
         conexion.commit()
 
-        # 2) Obtener la última matrícula real
         cursor.execute("""
             SELECT id_matricula, grado, anio, estado
             FROM matriculas
@@ -157,16 +133,14 @@ def actualizar_datos(id_estudiante, nombre, apellido, grado=None, estado=None):
         """, (id_estudiante,))
         last = cursor.fetchone()
 
-        last_grado = last[1] if last else None
-        last_estado = last[3] if last else None
+        last_grado = last["grado"] if last else None
+        last_estado = last["estado"] if last else None
         print(f"🔎 Última matrícula encontrada: {last}")
 
-        # 3) Si hay cambio -> insertar nueva matrícula
         if (grado is not None and grado != last_grado) or (estado is not None and estado != last_estado):
             anio_actual = datetime.now().year
             nuevo_grado = grado or last_grado
             nuevo_estado = estado if state_is_valid(estado) else (last_estado or "Estudiante")
-
             print(f"🟢 Cambio detectado → creando nueva matrícula para {id_estudiante}")
             registrar_matricula(id_estudiante, nuevo_grado, anio_actual, nuevo_estado)
         else:
@@ -196,7 +170,7 @@ def actualizar_rostro(id_estudiante, foto_bytes=None):
         return False
 
     conexion = crear_conexion()
-    cursor = conexion.cursor()
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
     sql = "UPDATE estudiantes SET foto_rostro = %s WHERE id_estudiante = %s"
     cursor.execute(sql, (foto_bytes, id_estudiante))
     conexion.commit()
@@ -210,26 +184,20 @@ def actualizar_rostro(id_estudiante, foto_bytes=None):
 #   MATRICULAS (historial académico)
 # ==========================================================
 def registrar_matricula(id_estudiante, grado, anio=None, estado="Estudiante"):
-    """
-    Inserta una nueva matrícula para un estudiante existente.
-    id_matricula = id_estudiante + "-" + consecutivo_por_estudiante (formato 02d)
-    """
     conexion, cursor = None, None
     try:
         if anio is None:
             anio = datetime.now().year
 
         conexion = crear_conexion()
-        cursor = conexion.cursor()
+        cursor = conexion.cursor(pymysql.cursors.DictCursor)
 
-        # 1) Contar cuántas matrículas ya tiene
-        cursor.execute("SELECT COUNT(*) FROM matriculas WHERE id_estudiante = %s", (id_estudiante,))
-        total = cursor.fetchone()[0] or 0
+        cursor.execute("SELECT COUNT(*) AS total FROM matriculas WHERE id_estudiante = %s", (id_estudiante,))
+        total = cursor.fetchone()["total"] or 0
         consecutivo = total + 1
 
         id_matricula = f"{id_estudiante}-{consecutivo:02d}"
 
-        # 2) Insertar nueva matrícula
         sql_insert = """
             INSERT INTO matriculas (id_matricula, id_estudiante, grado, anio, estado)
             VALUES (%s, %s, %s, %s, %s)
@@ -252,13 +220,10 @@ def registrar_matricula(id_estudiante, grado, anio=None, estado="Estudiante"):
 
 
 def actualizar_matricula(id_matricula, grado=None, estado=None):
-    """
-    Actualiza campos de una matrícula existente (grado/estado).
-    """
     conexion, cursor = None, None
     try:
         conexion = crear_conexion()
-        cursor = conexion.cursor()
+        cursor = conexion.cursor(pymysql.cursors.DictCursor)
 
         sets, params = [], []
         if grado is not None:
@@ -291,7 +256,7 @@ def actualizar_matricula(id_matricula, grado=None, estado=None):
 
 def obtener_matriculas_por_estudiante(id_estudiante):
     conexion = crear_conexion()
-    cursor = conexion.cursor(dictionary=True)
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
     sql = """SELECT id_matricula, grado, anio, estado
              FROM matriculas WHERE id_estudiante = %s
              ORDER BY CAST(SUBSTRING_INDEX(id_matricula, '-', -1) AS UNSIGNED) DESC"""

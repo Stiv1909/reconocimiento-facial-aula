@@ -1,4 +1,4 @@
-import sys
+import sys, os
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QGridLayout, QToolButton, QFrame, QGraphicsDropShadowEffect, QInputDialog, QDialog
@@ -16,6 +16,7 @@ from registro_docente import RegistroDocente
 from registro_estudiante import RegistroEstudiantes
 from historial_accesos import HistorialAccesos
 from registrar_incidente import RegistrarIncidente
+from reporte import ReporteAsistencias
 
 # --- Función utilitaria: crear avatar circular ---
 def crear_avatar_circular(ruta_imagen, tamaño=80, borde=3, color_borde=QColor("white")):
@@ -330,6 +331,8 @@ class InterfazAdministrativa(QWidget):
                 btn.clicked.connect(self.abrir_historial_accesos)
             elif texto == "Registrar Incidente":
                 btn.clicked.connect(self.abrir_registrar_incidente)
+            elif texto == "Generación de Asistencia":
+                btn.clicked.connect(self.abrir_reporte_asistencias)
 
 
             grid.addWidget(btn, row, col)
@@ -421,6 +424,11 @@ class InterfazAdministrativa(QWidget):
     def abrir_registrar_incidente(self):
         self.ventana_incidente = RegistrarIncidente()
         self.ventana_incidente.showMaximized()
+        self.close()
+    
+    def abrir_reporte_asistencias(self):
+        self.ventana_reporte = ReporteAsistencias()
+        self.ventana_reporte.showMaximized()
         self.close()
 
     # --- Cerrar sesión ---

@@ -1,7 +1,8 @@
 # modules/incidentes_logic.py
-from datetime import date
+from datetime import date, datetime
 from modules.conexion import crear_conexion, cerrar_conexion
 from modules.sesion import Sesion
+import pymysql
 
 def _obtener_cedula_sesion():
     """
@@ -12,7 +13,6 @@ def _obtener_cedula_sesion():
     try:
         usuario = Sesion.obtener_usuario()
     except Exception:
-        # Sesion puede exponer otro método; en caso de error devolvemos None
         usuario = None
 
     if not usuario:
@@ -36,13 +36,13 @@ def _obtener_cedula_sesion():
 def obtener_equipos_en_uso():
     """
     Retorna lista de equipos que actualmente están en uso (historial.hora_fin IS NULL).
-    Cada elemento es dict {'id_equipo': 'E-01'} si se usa cursor(dictionary=True).
+    Cada elemento es dict {'id_equipo': 'E-01'}.
     """
     conexion = crear_conexion()
     if not conexion:
         return []
 
-    cursor = conexion.cursor(dictionary=True)
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
     try:
         cursor.execute("""
             SELECT DISTINCT h.id_equipo
@@ -68,7 +68,7 @@ def obtener_estudiante_por_equipo(id_equipo):
     if not conexion:
         return None
 
-    cursor = conexion.cursor(dictionary=True)
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
     try:
         cursor.execute("""
             SELECT m.id_matricula,
@@ -100,8 +100,6 @@ def registrar_incidente(id_matricula, id_equipo, descripcion, nuevo_estado=None)
     Además actualiza el estado del equipo si se indica nuevo_estado.
     Si el nuevo estado es "dañado", cierra el historial (asigna hora_fin actual).
     """
-    from datetime import datetime  # 🔹 para registrar hora de salida
-
     cedula = _obtener_cedula_sesion()
     if not cedula:
         return False, "No hay una sesión de docente activa (no se encontró cédula)."
@@ -134,7 +132,7 @@ def registrar_incidente(id_matricula, id_equipo, descripcion, nuevo_estado=None)
                 UPDATE equipos SET estado = %s WHERE id_equipo = %s
             """, (nuevo_estado.lower(), id_equipo))
 
-            # 🔹 NUEVO: si el estado es "dañado", cerrar el historial activo
+            # si el estado es "dañado", cerrar el historial activo
             if nuevo_estado.lower() == "dañado":
                 hora_fin = datetime.now().strftime("%H:%M:%S")
                 cursor.execute("""
@@ -151,4 +149,3 @@ def registrar_incidente(id_matricula, id_equipo, descripcion, nuevo_estado=None)
     finally:
         cursor.close()
         cerrar_conexion(conexion)
-

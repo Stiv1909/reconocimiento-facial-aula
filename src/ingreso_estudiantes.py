@@ -179,7 +179,7 @@ class IngresoEstudiantes(QWidget):
         # --- Botón ---
         btn_finalizar = QPushButton("Finalizar ingreso")
         btn_finalizar.setObjectName("btnFinalizar")
-        btn_finalizar.clicked.connect(self.close)
+        btn_finalizar.clicked.connect(self.volver_menu)
 
         # --- Layout principal ---
         frame = QFrame()

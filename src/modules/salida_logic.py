@@ -3,7 +3,7 @@ import cv2
 import face_recognition
 from datetime import datetime
 from modules.conexion import crear_conexion, cerrar_conexion
-
+import pymysql
 
 # ----------------------------------------------------
 # Cargar estudiantes con equipos ocupados (última matrícula activa)
@@ -13,7 +13,7 @@ def cargar_estudiantes():
     if not conexion:
         return []
 
-    cursor = conexion.cursor()
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
     cursor.execute(
         """
         SELECT e.id_estudiante, e.nombres, e.apellidos, e.foto_rostro
@@ -28,7 +28,8 @@ def cargar_estudiantes():
 
     estudiantes = []
     try:
-        for id_est, nombres, apellidos, foto_blob in cursor.fetchall():
+        for row in cursor.fetchall():
+            foto_blob = row["foto_rostro"]
             if foto_blob is None:
                 continue
 
@@ -41,8 +42,8 @@ def cargar_estudiantes():
             encodings = face_recognition.face_encodings(rgb)
             if len(encodings) > 0:
                 estudiantes.append({
-                    "id": id_est,
-                    "nombre": f"{nombres} {apellidos}",
+                    "id": row["id_estudiante"],
+                    "nombre": f"{row['nombres']} {row['apellidos']}",
                     "encoding": encodings[0]
                 })
     finally:
@@ -90,28 +91,28 @@ def registrar_salida(id_estudiante):
     if not conexion:
         return None
 
-    cursor = conexion.cursor()
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
     try:
-        # 1) Obtener la última matrícula activa
+        # 1) Última matrícula activa
         cursor.execute(
-            "SELECT MAX(id_matricula) FROM matriculas WHERE id_estudiante = %s AND estado = 'Estudiante'",
+            "SELECT MAX(id_matricula) AS max_matricula FROM matriculas WHERE id_estudiante = %s AND estado = 'Estudiante'",
             (id_estudiante,)
         )
         row = cursor.fetchone()
-        matricula = row[0] if row else None
+        matricula = row["max_matricula"] if row else None
         if not matricula:
             return None
 
-        # 2) Buscar si tiene sesión activa
+        # 2) Buscar equipo activo
         cursor.execute(
-            "SELECT h.id_equipo FROM historial h WHERE h.id_matricula = %s AND h.hora_fin IS NULL",
+            "SELECT id_equipo FROM historial WHERE id_matricula = %s AND hora_fin IS NULL",
             (matricula,)
         )
         row = cursor.fetchone()
         if not row:
             return None
 
-        id_equipo = row[0]
+        id_equipo = row["id_equipo"]
 
         # 3) Registrar hora de salida
         cursor.execute(
@@ -120,7 +121,10 @@ def registrar_salida(id_estudiante):
         )
 
         # 4) Liberar equipo
-        cursor.execute("UPDATE equipos SET estado = 'disponible' WHERE id_equipo = %s", (id_equipo,))
+        cursor.execute(
+            "UPDATE equipos SET estado = 'disponible' WHERE id_equipo = %s",
+            (id_equipo,)
+        )
 
         conexion.commit()
         return id_equipo
@@ -138,11 +142,11 @@ def contar_equipos_ocupados():
     if not conexion:
         return 0
 
-    cursor = conexion.cursor()
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
     try:
-        cursor.execute("SELECT COUNT(*) FROM equipos WHERE estado = 'ocupado'")
+        cursor.execute("SELECT COUNT(*) AS total FROM equipos WHERE estado = 'ocupado'")
         row = cursor.fetchone()
-        return row[0] if row else 0
+        return row["total"] if row else 0
     finally:
         cursor.close()
         cerrar_conexion(conexion)
@@ -156,7 +160,7 @@ def estudiantes_pendientes():
     if not conexion:
         return []
 
-    cursor = conexion.cursor()
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
     try:
         cursor.execute(
             """
@@ -169,7 +173,7 @@ def estudiantes_pendientes():
             GROUP BY e.id_estudiante
             """
         )
-        return [row[0] for row in cursor.fetchall()]
+        return [row["nombre"] for row in cursor.fetchall()]
     finally:
         cursor.close()
         cerrar_conexion(conexion)
@@ -183,15 +187,15 @@ def registrar_asistencia(grado=None):
     if not conexion:
         return
 
-    cursor = conexion.cursor()
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
     try:
-        # 1️⃣ Si se pasa un grado, usarlo directamente; si no, tomar el primero activo
+        # 1️⃣ Tomar grado si no se pasa
         if not grado:
             cursor.execute("SELECT grado FROM matriculas WHERE estado = 'Estudiante' LIMIT 1")
             row = cursor.fetchone()
             if not row:
                 return
-            grado = row[0]
+            grado = row["grado"]
 
         # 2️⃣ Obtener estudiantes de ese grado
         cursor.execute("""
@@ -206,18 +210,19 @@ def registrar_asistencia(grado=None):
             print(f"No hay estudiantes registrados en el grado {grado}")
             return
 
-        # 3️⃣ Obtener los que usaron equipo hoy
+        # 3️⃣ Obtener matrículas que usaron equipo hoy
         cursor.execute("""
             SELECT DISTINCT m.id_matricula
             FROM historial h
             INNER JOIN matriculas m ON m.id_matricula = h.id_matricula
             WHERE DATE(h.hora_inicio) = CURDATE()
         """)
-        presentes = [row[0] for row in cursor.fetchall()]
+        presentes = [row["id_matricula"] for row in cursor.fetchall()]
 
         # 4️⃣ Registrar asistencias
         fecha_hoy = datetime.now().date()
-        for id_est, id_matricula in estudiantes:
+        for est in estudiantes:
+            id_matricula = est["id_matricula"]
             estado = 'presente' if id_matricula in presentes else 'ausente'
             cursor.execute("""
                 INSERT INTO asistencias (id_matricula, fecha, estado)
@@ -230,4 +235,3 @@ def registrar_asistencia(grado=None):
     finally:
         cursor.close()
         cerrar_conexion(conexion)
-

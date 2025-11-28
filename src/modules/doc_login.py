@@ -87,7 +87,7 @@ def cargar_docentes():
         print("❌ No se pudo conectar a la BD")
         return []
 
-    cursor = conexion.cursor(dictionary=True)
+    cursor = conexion.cursor()
     try:
         # Obtener los campos relevantes de la tabla docentes
         cursor.execute("SELECT cedula, nombres, apellidos, es_admin, foto_rostro FROM docentes")

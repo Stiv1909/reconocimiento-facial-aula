@@ -1,3 +1,7 @@
+print("Iniciando login.py...")
+import faulthandler
+faulthandler.enable()
+
 import sys
 import cv2
 import numpy as np
@@ -5,7 +9,7 @@ import face_recognition
 import time
 import dlib
 from scipy.spatial import distance as dist
-
+import sys, os
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout,
     QHBoxLayout, QFrame, QGraphicsDropShadowEffect, QMessageBox
@@ -16,6 +20,8 @@ from PyQt6.QtCore import Qt, QTimer
 from modules.doc_login import cargar_docentes
 from menu import InterfazAdministrativa   # ✅ Importar tu menú
 from modules.sesion import Sesion
+from registro_docente import RegistroDocente
+from modules.validaciones import existe_docente_admin
 
 # -------------------------------
 # Función para calcular EAR (Eye Aspect Ratio)
@@ -38,6 +44,16 @@ def normalizar_foto(foto):
 class InicioSesionDocente(QWidget):
     def __init__(self):
         super().__init__()
+         # 🔥 1. Primero verificar si hay un docente admin
+        if not existe_docente_admin():
+            QMessageBox.information(
+                self,
+                "Registrar administrador",
+                "No existe un docente administrador registrado.\nDebes crear uno antes de iniciar el sistema."
+            )
+            self.registrar_admin()
+            return  # salir del login
+
         self.setWindowTitle("Inicio sesión docente - Institución Educativa del Sur")
         self.centrar_ventana(1250, 670)
 
@@ -60,15 +76,21 @@ class InicioSesionDocente(QWidget):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
-
-        self.guia_pix = QPixmap("src/guia_silueta.png")\
+        ruta_guia = os.path.join(os.path.dirname(__file__), "guia_silueta.png")
+        self.guia_pix = QPixmap(ruta_guia)\
             .scaled(800, 350, Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation)
 
         # --- Inicializar detector dlib ---
         self.detector = dlib.get_frontal_face_detector()
-        self.predictor = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")
+        def resource_path(rel_path):
+            if hasattr(sys, '_MEIPASS'):
+                return os.path.join(sys._MEIPASS, rel_path)
+            # ruta cuando corres normal (sin .exe)
+            return os.path.join(os.path.dirname(__file__), "..", rel_path)
 
+        model_path = resource_path("models/shape_predictor_68_face_landmarks.dat")
+        self.predictor = dlib.shape_predictor(model_path)
         self.init_ui()
 
     def centrar_ventana(self, ancho, alto):
@@ -76,6 +98,11 @@ class InicioSesionDocente(QWidget):
         x = (screen.width() - ancho) // 2
         y = (screen.height() - alto) // 2
         self.setGeometry(x, y, ancho, alto)
+
+    def registrar_admin(self):
+        self.reg = RegistroDocente()
+        self.reg.show()
+        self.close()  # cerrar ventana de login
 
     def init_ui(self):
         self.setStyleSheet("""
@@ -105,7 +132,6 @@ class InicioSesionDocente(QWidget):
                 font-weight: bold;
                 color: white;
             }
-            QPushButton#btnInicio     { background-color: rgba(21,101,192,0.6); }
             QPushButton#btnInfo       { background-color: rgba(198,40,40,0.60); }
             QPushButton:hover         { opacity: 0.85; }
         """)
@@ -127,8 +153,7 @@ class InicioSesionDocente(QWidget):
         text_layout.addWidget(lema)
         text_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
-        btn_inicio = QPushButton("INICIO")
-        btn_inicio.setObjectName("btnInicio")
+        
         btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
         btn_info.clicked.connect(self.close)
@@ -137,7 +162,6 @@ class InicioSesionDocente(QWidget):
         header.addWidget(logo)
         header.addLayout(text_layout)
         header.addStretch()
-        header.addWidget(btn_inicio)
         header.addWidget(btn_info)
 
         separador = QFrame()
@@ -217,7 +241,7 @@ class InicioSesionDocente(QWidget):
         contrasena = self.txt_contrasena.text().strip()
 
         conexion = crear_conexion()
-        cursor = conexion.cursor(dictionary=True)
+        cursor = conexion.cursor()
         cursor.execute("SELECT * FROM usuarios WHERE usuario=%s AND contrasena=%s", (usuario, contrasena))
         datos = cursor.fetchone()
 
@@ -339,7 +363,11 @@ class InicioSesionDocente(QWidget):
         self.close()
 
     def closeEvent(self, event):
-        self.cap.release()
+        if hasattr(self, "cap") and self.cap is not None:
+            try:
+                self.cap.release()
+            except:
+                pass
         super().closeEvent(event)
 
 

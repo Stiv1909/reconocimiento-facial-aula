@@ -31,7 +31,6 @@ env/
 *.db
 *.sqlite3
 *.json
-
 # === Archivos de sistemas operativos ===
 .DS_Store
 Thumbs.db
@@ -44,7 +43,7 @@ dist/
 *.egg
 *.manifest
 *.spec
-
+*buildenv/
 # === Archivos temporales ===
 *.tmp
 *.temp

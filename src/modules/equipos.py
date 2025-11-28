@@ -1,35 +1,24 @@
+import pymysql
 from modules.conexion import crear_conexion, cerrar_conexion
-
 
 # ==========================================================
 #   FUNCIÓN: agregar_equipo
-#   Descripción:
-#       - Inserta un nuevo equipo en la tabla "equipos".
-#       - Genera automáticamente un ID con formato E-01, E-02, ...
-#   Parámetros:
-#       - estado (str): estado inicial del equipo (por defecto "Disponible").
-#   Retorna:
-#       - True  -> si el registro fue exitoso
-#       - False -> si ocurrió un error
 # ==========================================================
 def agregar_equipo(estado="Disponible"):
-    conexion = None
-    cursor = None
+    conexion, cursor = None, None
     try:
         conexion = crear_conexion()
-        cursor = conexion.cursor()
+        cursor = conexion.cursor(pymysql.cursors.DictCursor)  # <--- DictCursor
 
         # Buscar último ID registrado
         cursor.execute("SELECT id_equipo FROM equipos ORDER BY id_equipo DESC LIMIT 1")
         row = cursor.fetchone()
 
         if row:
-            # Ejemplo último: "E-07" → genera "E-08"
-            ultimo_codigo = row[0]
+            ultimo_codigo = row['id_equipo']  # <--- usar nombre de columna
             num = int(ultimo_codigo.split("-")[1])
             nuevo_codigo = f"E-{num+1:02d}"
         else:
-            # Si no hay registros, empieza en E-01
             nuevo_codigo = "E-01"
 
         # Insertar en la tabla
@@ -40,11 +29,12 @@ def agregar_equipo(estado="Disponible"):
         print(f"✅ Equipo agregado con código {nuevo_codigo}")
         return True
 
-    except Exception as e:
+    except pymysql.MySQLError as e:
         print("❌ Error al agregar equipo:", e)
         if conexion:
             conexion.rollback()
         return False
+
     finally:
         if cursor: cursor.close()
         if conexion: cerrar_conexion(conexion)
@@ -52,15 +42,10 @@ def agregar_equipo(estado="Disponible"):
 
 # ==========================================================
 #   FUNCIÓN: obtener_equipos
-#   Descripción:
-#       - Devuelve todos los equipos registrados en la tabla.
-#       - Ordenados por ID de forma ascendente.
-#   Retorna:
-#       - Lista de tuplas: [(id_equipo, estado), ...]
 # ==========================================================
 def obtener_equipos():
     conexion = crear_conexion()
-    cursor = conexion.cursor()
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
 
     cursor.execute("SELECT id_equipo, estado FROM equipos ORDER BY id_equipo ASC")
     resultados = cursor.fetchall()
@@ -68,24 +53,14 @@ def obtener_equipos():
     cursor.close()
     cerrar_conexion(conexion)
 
-    # Convertir todo a string por seguridad
-    return [(str(codigo), str(estado)) for codigo, estado in resultados]
+    return [(r['id_equipo'], r['estado']) for r in resultados]
 
 
 # ==========================================================
 #   FUNCIÓN: actualizar_estado
-#   Descripción:
-#       - Cambia el estado de un equipo específico.
-#   Parámetros:
-#       - codigo (str): ID del equipo (ejemplo "E-03")
-#       - nuevo_estado (str): nuevo estado ("disponible", "ocupado", "dañado")
-#   Retorna:
-#       - True  -> si se actualizó correctamente
-#       - False -> si ocurrió un error
 # ==========================================================
 def actualizar_estado(codigo, nuevo_estado):
-    conexion = None
-    cursor = None
+    conexion, cursor = None, None
     try:
         conexion = crear_conexion()
         cursor = conexion.cursor()
@@ -97,11 +72,12 @@ def actualizar_estado(codigo, nuevo_estado):
         print(f"✅ Estado actualizado para {codigo} → {nuevo_estado}")
         return True
 
-    except Exception as e:
+    except pymysql.MySQLError as e:
         print("❌ Error al actualizar estado:", e)
         if conexion:
             conexion.rollback()
         return False
+
     finally:
         if cursor: cursor.close()
         if conexion: cerrar_conexion(conexion)
@@ -109,21 +85,16 @@ def actualizar_estado(codigo, nuevo_estado):
 
 # ==========================================================
 #   FUNCIÓN: generar_proximo_codigo
-#   Descripción:
-#       - Calcula cuál sería el próximo código secuencial.
-#       - Ejemplo: último "E-07" → devuelve "E-08".
-#   Retorna:
-#       - String con el próximo ID de equipo.
 # ==========================================================
 def generar_proximo_codigo():
     conexion = crear_conexion()
-    cursor = conexion.cursor()
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)  # <--- DictCursor
 
     cursor.execute("SELECT id_equipo FROM equipos ORDER BY id_equipo DESC LIMIT 1")
     row = cursor.fetchone()
 
     if row:
-        ultimo_codigo = row[0]  # Ejemplo: "E-07"
+        ultimo_codigo = row['id_equipo']  # <--- usar nombre de columna
         num = int(ultimo_codigo.split("-")[1])
         nuevo_codigo = f"E-{num+1:02d}"
     else:

@@ -1,3 +1,4 @@
+import pymysql
 from modules.conexion import crear_conexion, cerrar_conexion
 
 # ==========================================================
@@ -24,6 +25,7 @@ def registrar_docente(cedula, nombre, apellido, celular, es_admin, foto_bytes):
     - False si ocurre un error durante la inserción.
     """
 
+    conexion, cursor = None, None
     try:
         # Crear conexión a la base de datos
         conexion = crear_conexion()
@@ -49,7 +51,15 @@ def registrar_docente(cedula, nombre, apellido, celular, es_admin, foto_bytes):
         print(f"✅ Docente {nombre} {apellido} registrado con cédula {cedula}")
         return True
 
-    except Exception as e:
-        # Captura cualquier error (conexión, SQL, etc.)
+    except pymysql.MySQLError as e:
+        # Captura errores específicos de pymysql
         print("❌ Error al registrar docente:", e)
+        if conexion:
+            conexion.rollback()
         return False
+
+    finally:
+        if cursor:
+            cursor.close()
+        if conexion:
+            cerrar_conexion(conexion)
