@@ -1,5 +1,9 @@
+# Importa PyMySQL para manejo de errores de MySQL
 import pymysql
+
+# Importa funciones para crear y cerrar la conexión a base de datos
 from modules.conexion import crear_conexion, cerrar_conexion
+
 
 # ==========================================================
 #   FUNCIÓN: registrar_docente
@@ -7,6 +11,7 @@ from modules.conexion import crear_conexion, cerrar_conexion
 #       - Inserta un nuevo docente en la tabla "docentes"
 #       - Guarda cédula, nombres, apellidos, celular, si es admin y la foto
 # ==========================================================
+
 
 def registrar_docente(cedula, nombre, apellido, celular, es_admin, foto_bytes):
     """
@@ -25,11 +30,14 @@ def registrar_docente(cedula, nombre, apellido, celular, es_admin, foto_bytes):
     - False si ocurre un error durante la inserción.
     """
 
+
+    # Inicializa conexión y cursor en None para poder cerrarlos de forma segura
     conexion, cursor = None, None
     try:
         # Crear conexión a la base de datos
         conexion = crear_conexion()
         cursor = conexion.cursor()
+
 
         # Sentencia SQL parametrizada para evitar inyección SQL
         sql = """
@@ -37,19 +45,24 @@ def registrar_docente(cedula, nombre, apellido, celular, es_admin, foto_bytes):
             VALUES (%s, %s, %s, %s, %s, %s)
         """
 
+
         # Ejecutar la consulta pasando los valores en una tupla
         cursor.execute(sql, (cedula, nombre, apellido, celular, es_admin, foto_bytes))
 
+
         # Guardar los cambios en la base de datos
         conexion.commit()
+
 
         # Cerrar cursor y conexión
         cursor.close()
         cerrar_conexion(conexion)
 
+
         # Mensaje de confirmación
         print(f"✅ Docente {nombre} {apellido} registrado con cédula {cedula}")
         return True
+
 
     except pymysql.MySQLError as e:
         # Captura errores específicos de pymysql
@@ -58,8 +71,12 @@ def registrar_docente(cedula, nombre, apellido, celular, es_admin, foto_bytes):
             conexion.rollback()
         return False
 
+
     finally:
+        # Cierra el cursor si fue creado
         if cursor:
             cursor.close()
+
+        # Cierra la conexión si fue creada
         if conexion:
             cerrar_conexion(conexion)

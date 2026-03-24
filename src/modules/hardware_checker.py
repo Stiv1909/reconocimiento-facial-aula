@@ -1,13 +1,28 @@
+# Importa utilidades para manejo de archivos y rutas
 import os
+
+# Importa el módulo JSON para guardar y cargar configuración
 import json
+
+# Importa información del sistema operativo y procesador
 import platform
+
+# Librería para consultar recursos de hardware como RAM y CPU
 import psutil
+
+# OpenCV para consultar la cámara y su resolución
 import cv2
+
+# Componentes gráficos de PyQt6
 from PyQt6.QtWidgets import QDialog, QLabel, QVBoxLayout, QCheckBox, QPushButton
+
+# Utilidades base de Qt
 from PyQt6.QtCore import Qt
+
 
 # Ruta del archivo de configuración (se guarda en el mismo directorio)
 CONFIG_PATH = "config.json"
+
 
 
 # ============================================================
@@ -17,10 +32,14 @@ CONFIG_PATH = "config.json"
 # Prueba varias resoluciones comunes y devuelve la más alta estable.
 # ============================================================
 def obtener_resolucion_real(cam_index=0):
+    # Abre la cámara indicada; en Windows usa el backend DirectShow
     cap = cv2.VideoCapture(cam_index, cv2.CAP_DSHOW)  # Abre la cámara (en Windows usa DirectShow)
+
+    # Si la cámara no se puede abrir, devuelve una resolución base por defecto
     if not cap.isOpened():
         # Si no se logra abrir, se devuelve una resolución por defecto
         return (640, 480)
+
 
     # Lista de resoluciones típicas (de mayor a menor calidad)
     resoluciones_comunes = [
@@ -33,22 +52,32 @@ def obtener_resolucion_real(cam_index=0):
         (640, 480)
     ]
 
+
+    # Resolución mínima garantizada en caso de no encontrar una mejor
     max_res = (640, 480)  # Resolución mínima garantizada
+
     for w, h in resoluciones_comunes:
         # Intenta configurar la cámara con esa resolución
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
 
+
         # Obtiene la resolución real establecida por la cámara
         real_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         real_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
 
         # Guarda la mayor resolución alcanzada correctamente
         if real_w >= max_res[0] and real_h >= max_res[1]:
             max_res = (real_w, real_h)
 
+
+    # Libera la cámara antes de terminar la función
     cap.release()  # Libera la cámara
+
+    # Devuelve la mejor resolución detectada
     return max_res
+
 
 
 
@@ -62,17 +91,26 @@ def obtener_resolucion_real(cam_index=0):
 def obtener_info_hardware():
     """Obtiene la información del hardware y estima la capacidad de detección facial."""
 
+
     # --- Obtener resolución de cámara ---
     try:
+        # Intenta obtener la resolución real soportada por la cámara
         width, height = obtener_resolucion_real()
     except Exception:
         # Si falla (no hay cámara o error), se usa una resolución base
         width, height = (640, 480)
 
+
     # --- Información de hardware del sistema ---
+    # Calcula la memoria RAM total en GB
     ram_gb = psutil.virtual_memory().total / (1024 ** 3)  # Convierte bytes a GB
+
+    # Obtiene la cantidad de núcleos lógicos del procesador
     cpu_cores = psutil.cpu_count(logical=True)             # Núcleos lógicos
+
+    # Obtiene el nombre del procesador
     cpu_name = platform.processor()                        # Nombre del procesador
+
 
     # Diccionario con resoluciones de referencia
     resoluciones = {
@@ -82,9 +120,11 @@ def obtener_info_hardware():
         (3840, 2160): "4K"
     }
 
+
     # Texto con la resolución actual
     res_text = f"{int(width)}x{int(height)}"
     res_categoria = "Desconocida"
+
 
     # --- Determinar la categoría más cercana ---
     min_diff = float("inf")
@@ -94,7 +134,9 @@ def obtener_info_hardware():
             min_diff = diff
             res_categoria = nombre
 
+
     # --- Estimar capacidad facial según resolución ---
+    # Define una capacidad base según la categoría de resolución detectada
     if res_categoria == "480p":
         max_por_res = 2
     elif res_categoria == "720p":
@@ -106,7 +148,9 @@ def obtener_info_hardware():
     else:
         max_por_res = 2
 
+
     # --- Ajuste según potencia del hardware ---
+    # Ajusta la capacidad base según la RAM y la cantidad de núcleos
     if ram_gb >= 16 and cpu_cores >= 8:
         factor_hardware = 1.5
     elif ram_gb >= 8 and cpu_cores >= 4:
@@ -116,11 +160,15 @@ def obtener_info_hardware():
     else:
         factor_hardware = 0.7
 
+
     # --- Resultado final ---
+    # Calcula el máximo estimado de rostros simultáneos
     max_faces = int(max_por_res * factor_hardware)
     if max_faces < 1:
         max_faces = 1
 
+
+    # Retorna toda la información en un diccionario
     return {
         "cpu": cpu_name or "No detectado",
         "ram": round(ram_gb, 1),
@@ -132,6 +180,7 @@ def obtener_info_hardware():
 
 
 
+
 # ============================================================
 # 🔹 FUNCIONES: guardar_config / cargar_config
 # ------------------------------------------------------------
@@ -140,16 +189,23 @@ def obtener_info_hardware():
 # ============================================================
 def guardar_config(data):
     """Guarda la configuración actual en config.json."""
+    # Abre o crea el archivo de configuración en modo escritura
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        # Guarda el diccionario en formato JSON legible
         json.dump(data, f, indent=4)
+
 
 
 def cargar_config():
     """Carga la configuración guardada si existe."""
+    # Si el archivo no existe, retorna un diccionario vacío
     if not os.path.exists(CONFIG_PATH):
         return {}
+
+    # Si existe, abre el archivo y carga su contenido JSON
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
+
 
 
 
@@ -161,11 +217,15 @@ def cargar_config():
 # ============================================================
 def hardware_cambiado(previo, actual):
     """Compara campos clave del hardware para detectar cambios reales."""
+    # Lista de claves consideradas importantes para detectar cambios de hardware
     claves = ["cpu", "cores", "ram", "camera_res"]
+
     for clave in claves:
+        # Si alguna clave difiere entre la configuración previa y la actual, retorna True
         if previo.get(clave) != actual.get(clave):
             return True
     return False
+
 
 
 
@@ -178,9 +238,12 @@ def hardware_cambiado(previo, actual):
 class HardwareDialog(QDialog):
     """Ventana informativa sobre hardware y capacidad facial."""
 
+
     def __init__(self, hardware_info):
+        # Inicializa la clase base QDialog
         super().__init__()
         self.setWindowTitle("Chequeo de hardware")
+
 
         # Estilo visual (fondo oscuro y acentos azules)
         self.setStyleSheet("""
@@ -208,8 +271,10 @@ class HardwareDialog(QDialog):
             }
         """)
 
+
         # Crear el diseño vertical principal
         layout = QVBoxLayout()
+
 
         # Mostrar la información obtenida del hardware
         layout.addWidget(QLabel("🔍 Análisis del sistema detectado:"))
@@ -222,20 +287,25 @@ class HardwareDialog(QDialog):
         layout.addWidget(QLabel(f"➡ {hardware_info['max_faces']} rostros"))
         layout.addSpacing(15)
 
+
         # Checkbox para no volver a mostrar este diálogo
         self.chk_no_mostrar = QCheckBox("No volver a mostrar este mensaje")
         layout.addWidget(self.chk_no_mostrar)
+
 
         # Botón de aceptar
         btn_ok = QPushButton("Aceptar")
         btn_ok.clicked.connect(self.accept)  # Cierra el diálogo
         layout.addWidget(btn_ok, alignment=Qt.AlignmentFlag.AlignCenter)
 
+
         # Asignar layout al diálogo
         self.setLayout(layout)
 
+
         # Tamaño fijo de la ventana
         self.setFixedSize(420, 340)
+
 
 
 
@@ -250,23 +320,35 @@ class HardwareDialog(QDialog):
 def mostrar_chequeo_hardware():
     """Muestra el diálogo si es necesario o si cambió el hardware."""
 
+
+    # Detecta el hardware actual del sistema
     actual = obtener_info_hardware()  # Detectar hardware actual
+
+    # Carga la configuración previamente guardada
     config = cargar_config()          # Cargar config.json
+
 
     # Primera vez o si cambió el hardware desde el último chequeo
     if "hardware" not in config or hardware_cambiado(config.get("hardware", {}), actual):
+        # Muestra el diálogo de información
         dlg = HardwareDialog(actual)
         dlg.exec()  # Mostrar ventana de información
+
+        # Guarda el hardware detectado y la preferencia de visualización
         config["hardware"] = actual
         config["mostrar_dialogo"] = not dlg.chk_no_mostrar.isChecked()
         guardar_config(config)
         return actual
 
+
     # Si el usuario no desactivó la visualización, mostrar nuevamente
     if config.get("mostrar_dialogo", True):
+        # Muestra nuevamente el diálogo
         dlg = HardwareDialog(actual)
         dlg.exec()
         config["mostrar_dialogo"] = not dlg.chk_no_mostrar.isChecked()
         guardar_config(config)
 
+
+    # Devuelve siempre la información actual del hardware
     return actual

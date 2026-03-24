@@ -1,12 +1,23 @@
 # registrar_incidente_ui.py  (reemplaza el contenido de tu archivo actual)
+
+# Importa utilidades del sistema
 import sys
+
+# Importa widgets y layouts necesarios de PyQt6
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QFrame, QGraphicsDropShadowEffect, QComboBox, QTextEdit, QMessageBox
 )
+
+# Importa utilidades gráficas para imágenes y color
 from PyQt6.QtGui import QPixmap, QColor
+
+# Importa constantes y utilidades base de Qt
 from PyQt6.QtCore import Qt
+
+# Importa datetime para generar fecha y hora actuales
 from datetime import datetime
+
 
 # lógica: usa solo las funciones que definimos arriba
 from modules.incidentes_logic import (
@@ -16,28 +27,40 @@ from modules.incidentes_logic import (
 )
 from modules.sesion import Sesion
 
+
 class RegistrarIncidente(QWidget):
     def __init__(self):
+        # Inicializa la clase base QWidget
         super().__init__()
+
         # Mantengo la verificación de sesión igual que en EditarEstudiantes
         if not Sesion.esta_autenticado():
             QMessageBox.critical(self, "Acceso denegado", "❌ Debes iniciar sesión para acceder a esta ventana.")
             self.close()
             return
+
+        # Configura la ventana principal
         self.setWindowTitle("Registrar Incidente - Institución Educativa del Sur")
         self.showFullScreen()
         self.centrar_ventana()
         self.init_ui()
+
         # cargar equipos al iniciar
         self.cargar_equipos()
 
+
     def centrar_ventana(self):
+        # Obtiene la geometría de la pantalla principal
         screen = QApplication.primaryScreen().geometry()
+
+        # Calcula posición para centrar la ventana
         x = (screen.width() - self.width()) // 2
         y = (screen.height() - self.height()) // 2
         self.move(x, y)
 
+
     def init_ui(self):
+        # Aplica estilos visuales generales de la interfaz
         self.setStyleSheet("""
             QWidget {
                 background-color: #0D1B2A;
@@ -60,7 +83,7 @@ class RegistrarIncidente(QWidget):
                 font-size: 18px;
                 color: #aaa;
             }
-                           
+                            
             QComboBox, QTextEdit {
                 background-color: white;
                 color: black;
@@ -74,14 +97,16 @@ class RegistrarIncidente(QWidget):
                 font-weight: bold;
                 color: white;
             }
-            QPushButton#btnMenu     { background-color: rgba(21, 101, 192, 0.60); }
-            QPushButton#btnInfo       { background-color: rgba(198,40,40,0.60); }
-            QPushButton#btnResumen    { background-color: rgba(255,193,7,0.60); color: black; }
-            QPushButton#btnRegistrar  { background-color: rgba(21, 101, 192, 0.60); }
+            QPushButton#btnMenu      { background-color: rgba(21, 101, 192, 0.60); }
+            QPushButton#btnInfo        { background-color: rgba(198,40,40,0.60); }
+            QPushButton#btnResumen     { background-color: rgba(255,193,7,0.60); color: black; }
+            QPushButton#btnRegistrar   { background-color: rgba(21, 101, 192, 0.60); }
             QPushButton:hover         { opacity: 0.85; }
         """)
 
+
         # Header
+        # Crea label para mostrar el logo institucional
         logo = QLabel()
         pix = QPixmap("src/logo_institucion.jpeg")
         if not pix.isNull():
@@ -89,6 +114,8 @@ class RegistrarIncidente(QWidget):
                                       Qt.TransformationMode.SmoothTransformation))
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+
+        # Crea etiqueta HTML con nombre y lema de la institución
         titulo_colegio = QLabel(
             "<div style='text-align:left;'>"
             "<p style='font-size:32px; font-weight:bold; color:#E3F2FD; margin:0;'>Institución Educativa del Sur</p>"
@@ -98,14 +125,20 @@ class RegistrarIncidente(QWidget):
         titulo_colegio.setObjectName("tituloColegio")
         titulo_colegio.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
+
+        # Botón para volver al menú
         btn_menu = QPushButton("MENÚ")
         btn_menu.setObjectName("btnMenu")
         btn_menu.clicked.connect(self.volver_menu)   
 
+
+        # Botón para cerrar el programa
         btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
         btn_info.clicked.connect(lambda: sys.exit(0))
 
+
+        # Layout horizontal del encabezado
         header = QHBoxLayout()
         header.addWidget(logo)
         header.addWidget(titulo_colegio)
@@ -113,34 +146,48 @@ class RegistrarIncidente(QWidget):
         header.addWidget(btn_menu)
         header.addWidget(btn_info)
 
+
+        # Línea separadora bajo el encabezado
         separador = QFrame()
         separador.setFrameShape(QFrame.Shape.HLine)
         separador.setStyleSheet("color: #444;")
 
+
         # Título
+        # Título principal de la ventana
         titulo = QLabel("Registrar Incidente")
         titulo.setObjectName("titulo")
         titulo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
 
         # --- Sección Incidentes ---
         # combo de equipos (se cargará desde BD)
         self.cmb_equipo = QComboBox()
         self.cmb_equipo.currentIndexChanged.connect(self.on_equipo_changed)
 
+
         # etiqueta para mostrar el estudiante asociado al equipo seleccionado
         self.lbl_estudiante = QLabel("Estudiante: —")
         self.lbl_estudiante.setStyleSheet("color: #E3F2FD; font-weight: bold;")
 
+
+        # Combo para seleccionar el nuevo estado del equipo
         self.cmb_estado = QComboBox()
         self.cmb_estado.addItems(["Dañado", "Ocupado"])
 
+
+        # Caja de texto para descripción libre del incidente
         self.txt_descripcion = QTextEdit()
         self.txt_descripcion.setPlaceholderText("Describe el incidente con detalle...")
 
+
+        # Botón para generar resumen narrativo
         btn_resumen = QPushButton("Generar Resumen")
         btn_resumen.setObjectName("btnResumen")
         btn_resumen.clicked.connect(self.generar_resumen)
 
+
+        # Layout vertical de la sección de entrada del incidente
         incidente_layout = QVBoxLayout()
         incidente_layout.addWidget(QLabel("Equipo"))
         incidente_layout.addWidget(self.cmb_equipo)
@@ -151,56 +198,75 @@ class RegistrarIncidente(QWidget):
         incidente_layout.addWidget(self.txt_descripcion)
         incidente_layout.addWidget(btn_resumen, alignment=Qt.AlignmentFlag.AlignRight)
 
+
         # --- Sección Resumen ---
+        # Caja de texto de solo lectura para mostrar el resumen generado
         self.txt_resumen = QTextEdit()
         self.txt_resumen.setReadOnly(True)
         self.txt_resumen.setPlaceholderText("Aquí aparecerá el resumen generado...")
 
+
+        # Botón para registrar definitivamente el incidente
         btn_registrar = QPushButton("Registrar Incidente")
         btn_registrar.setObjectName("btnRegistrar")
         btn_registrar.clicked.connect(self.ui_registrar_incidente)
 
+
+        # Layout vertical de la sección resumen
         resumen_layout = QVBoxLayout()
         resumen_layout.addWidget(QLabel("Resumen"))
         resumen_layout.addWidget(self.txt_resumen)
         resumen_layout.addWidget(btn_registrar, alignment=Qt.AlignmentFlag.AlignCenter)
 
+
         # Layout principal
+        # Distribuye lado a lado la entrada del incidente y el resumen
         contenido = QHBoxLayout()
         contenido.addLayout(incidente_layout, 1)
         contenido.addLayout(resumen_layout, 1)
 
+
+        # Frame contenedor principal con sombra
         frame = QFrame()
         shadow = QGraphicsDropShadowEffect()
         shadow.setBlurRadius(20)
         shadow.setColor(QColor(0, 0, 0, 150))
         frame.setGraphicsEffect(shadow)
 
+
+        # Layout vertical del contenido interno
         vbox = QVBoxLayout(frame)
         vbox.addLayout(header)
         vbox.addWidget(separador)
         vbox.addWidget(titulo)
         vbox.addLayout(contenido)
 
+
+        # Asigna layout raíz a la ventana
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(frame)
 
+
         # estado: estudiante actual dict (id_matricula, nombres, apellidos) o None
         self.estudiante_actual = None
+
 
     # ---------- Integración con lógica ----------
     def cargar_equipos(self):
         """
         Carga el combo con equipos que actualmente están en uso (historial.hora_fin IS NULL)
         """
+        # Consulta los equipos actualmente en uso
         equipos = obtener_equipos_en_uso()
         self.cmb_equipo.clear()
         if not equipos:
+            # Si no hay equipos en uso, deshabilita el combo y limpia estudiante actual
             self.cmb_equipo.addItem("— No hay equipos en uso —")
             self.cmb_equipo.setEnabled(False)
             self.lbl_estudiante.setText("Estudiante: —")
             self.estudiante_actual = None
             return
+
 
         # equipos viene como lista de dicts {'id_equipo': 'E-26'}
         for row in equipos:
@@ -211,24 +277,33 @@ class RegistrarIncidente(QWidget):
                 # si viene como tupla o string, manejarlo
                 self.cmb_equipo.addItem(str(row[0]) if isinstance(row, (list, tuple)) else str(row))
 
+
+        # Habilita el combo y fuerza actualización del estudiante mostrado
         self.cmb_equipo.setEnabled(True)
+
         # seleccionar primero y forzar mostrar estudiante
         self.on_equipo_changed()
+
 
     def on_equipo_changed(self):
         """
         Cuando cambia el equipo seleccionado, consulta quién lo está usando y lo muestra.
         """
+        # Obtiene el equipo actualmente seleccionado
         id_equipo = self.cmb_equipo.currentText()
         if not id_equipo or id_equipo.startswith("—"):
             self.lbl_estudiante.setText("Estudiante: —")
             self.estudiante_actual = None
             return
 
+
+        # Consulta el estudiante que tiene asignado ese equipo
         estudiante = obtener_estudiante_por_equipo(id_equipo)
         if estudiante:
+            # Construye el nombre completo del estudiante
             nombre = f"{estudiante.get('nombres','')} {estudiante.get('apellidos','')}".strip()
             self.lbl_estudiante.setText(f"Estudiante: {nombre}")
+
             # guardamos id_matricula para registrar luego
             self.estudiante_actual = {
                 "id_matricula": estudiante.get("id_matricula"),
@@ -237,33 +312,44 @@ class RegistrarIncidente(QWidget):
                 "apellidos": estudiante.get("apellidos")
             }
         else:
+            # Si no hay estudiante activo en el equipo, limpia estado
             self.lbl_estudiante.setText("Estudiante: No hay estudiante activo en este equipo")
             self.estudiante_actual = None
+
 
     def generar_resumen(self):
         """
         Genera el resumen con formato narrativo, usando el estudiante actual si está disponible.
         """
+        # Obtiene valores actuales del formulario
         id_equipo = self.cmb_equipo.currentText()
         estado = self.cmb_estado.currentText()
         descripcion = self.txt_descripcion.toPlainText().strip()
+
 
         if not descripcion:
             QMessageBox.warning(self, "Descripción vacía", "⚠ Debes escribir una descripción del incidente.")
             return
 
+
         if not id_equipo or id_equipo.startswith("—"):
             QMessageBox.warning(self, "Equipo inválido", "⚠ Selecciona un equipo válido.")
             return
 
+
+        # Obtiene nombre del estudiante actual si existe
         if self.estudiante_actual:
             nombre_est = f"{self.estudiante_actual.get('nombres','')} {self.estudiante_actual.get('apellidos','')}".strip()
         else:
             nombre_est = "—"
 
+
+        # Obtiene fecha y hora actuales formateadas
         fecha_actual = datetime.now().strftime("%d/%m/%Y")
         hora_actual = datetime.now().strftime("%H:%M:%S")
 
+
+        # Genera el resumen narrativo del incidente
         resumen = (
             f"El equipo #{id_equipo} tuvo el siguiente incidente:\n"
             f"{descripcion}\n\n"
@@ -271,52 +357,70 @@ class RegistrarIncidente(QWidget):
             f"en el momento que el estudiante {nombre_est} se encontraba haciendo uso del mismo."
         )
 
+
+        # Muestra el resumen en el cuadro de texto correspondiente
         self.txt_resumen.setText(resumen)
+
 
     def ui_registrar_incidente(self):
         """
         Handler del botón Registrar Incidente: valida y llama a registrar_incidente()
         """
+        # Obtiene descripción y equipo actuales
         descripcion = self.txt_descripcion.toPlainText().strip()
         id_equipo = self.cmb_equipo.currentText()
+
 
         if not descripcion:
             QMessageBox.warning(self, "Descripción vacía", "⚠ Debes escribir una descripción del incidente.")
             return
 
+
         if not id_equipo or id_equipo.startswith("—"):
             QMessageBox.warning(self, "Equipo inválido", "⚠ Selecciona un equipo válido.")
             return
+
 
         if not self.estudiante_actual or not self.estudiante_actual.get("id_matricula"):
             QMessageBox.warning(self, "Sin estudiante", "⚠ No hay un estudiante asociado al equipo seleccionado.")
             return
 
+
+        # Obtiene la matrícula activa del estudiante asociado
         id_matricula = self.estudiante_actual["id_matricula"]
 
+
+        # Obtiene el nuevo estado a registrar y llama a la lógica
         nuevo_estado = self.cmb_estado.currentText()
         success, message = registrar_incidente(id_matricula, id_equipo, descripcion, nuevo_estado)
 
+
         if success:
+            # Si el registro fue exitoso, limpia la UI y recarga equipos
             QMessageBox.information(self, "Incidente registrado", f"✅ {message}")
-            # limpiar UI y recargar equipos (si acaso el historial cambió)
             self.txt_descripcion.clear()
             self.txt_resumen.clear()
             self.cargar_equipos()
         else:
             QMessageBox.warning(self, "Error al registrar", f"❌ {message}")
 
+
     def volver_menu(self):
+        # Verifica sesión antes de volver al menú
         if not Sesion.esta_autenticado():
             QMessageBox.warning(self, "Sesión requerida", "⚠ Debe iniciar sesión para acceder al menú.")
             return
 
+
+        # Abre la interfaz administrativa y cierra la actual
         from menu import InterfazAdministrativa
         self.ventana_menu = InterfazAdministrativa()
         self.ventana_menu.showMaximized()
         self.close()
 
+
 if __name__ == "__main__":
+    # Crea la aplicación principal
     app = QApplication(sys.argv)
     ventana = RegistrarIncidente()
     ventana.show()
