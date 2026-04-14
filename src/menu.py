@@ -79,6 +79,40 @@ def crear_avatar_circular(ruta_imagen, tamaño=80, borde=3, color_borde=QColor("
 
 
 
+# --- Función utilitaria: crear icono en blanco ---
+def _crear_icono_blanco(ruta_icono, tamaño=180):
+    """Crea una versión blanca del ícono especificado."""
+    # Cargar el pixmap original
+    pixmap = QPixmap(ruta_icono)
+    if pixmap.isNull():
+        return QIcon()
+
+    # Escalar al tamaño requerido
+    size = QSize(tamaño, tamaño)
+    pixmap = pixmap.scaled(size, Qt.AspectRatioMode.KeepAspectRatio,
+                         Qt.TransformationMode.SmoothTransformation)
+
+    # Convertir a escala de grises y luego a blanco
+    img = pixmap.toImage()
+    width = img.width()
+    height = img.height()
+
+    # Crear nueva imagen en blanco
+    result_img = QImage(width, height, QImage.Format.Format_ARGB32)
+    result_img.fill(Qt.GlobalColor.transparent)
+
+    # Procesar cada pixel
+    for y in range(height):
+        for x in range(width):
+            pixel = img.pixel(x, y)
+            if pixel != 0:  # No completamente transparente
+                color = QColor(pixel)
+                if color.alpha() > 0:
+                    result_img.setPixelColor(x, y, QColor(255, 255, 255, color.alpha()))
+
+    return QIcon(QPixmap.fromImage(result_img))
+
+
 # --- Botón avanzado ---
 class BotonTarjetaAvanzado(QToolButton):
     def __init__(self, icono, texto="", color_borde="#2E7D32", parent=None):
@@ -88,6 +122,7 @@ class BotonTarjetaAvanzado(QToolButton):
         # Guarda el texto y color asociado al botón
         self.texto = texto
         self.color_borde = color_borde
+        self.ruta_icono = icono  # Guarda la ruta del ícono original
 
         # Posición inicial del brillo animado
         self._brillo_pos = -1.0
@@ -101,7 +136,7 @@ class BotonTarjetaAvanzado(QToolButton):
         self.anim_brillo.setEndValue(1.0)
 
 
-        # Asigna ícono al botón
+        # Asigna ícono original al botón
         self.setIcon(QIcon(icono))
 
         # Tamaños del ícono en estado normal y hover
@@ -209,6 +244,9 @@ class BotonTarjetaAvanzado(QToolButton):
         self.anim_brillo.setDirection(QPropertyAnimation.Direction.Forward)
         self.anim_brillo.start()
 
+        # Cambia el ícono a blanco en hover
+        self.setIcon(_crear_icono_blanco(self.ruta_icono, self.icon_size_default))
+
         # Llama al comportamiento original del evento
         super().enterEvent(event)
 
@@ -227,6 +265,9 @@ class BotonTarjetaAvanzado(QToolButton):
         self.anim_texto.setStartValue(1.0)
         self.anim_texto.setEndValue(0.0)
         self.anim_texto.start()
+
+        # Restaura el ícono original al salir del hover
+        self.setIcon(QIcon(self.ruta_icono))
 
         # Reinicia el efecto de brillo
         self.anim_brillo.stop()
@@ -285,6 +326,7 @@ class InterfazAdministrativa(QWidget):
             # No hay sesión: cerramos la ventana (redirigir al login)
             self.close()
             return
+
 
 
         # Construye la interfaz gráfica

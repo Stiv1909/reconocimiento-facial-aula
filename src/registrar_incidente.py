@@ -1,4 +1,4 @@
-# registrar_incidente_ui.py  (reemplaza el contenido de tu archivo actual)
+# registrar_incidente.py
 
 # Importa utilidades del sistema
 import sys

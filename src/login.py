@@ -594,6 +594,16 @@ class InicioSesionDocente(QWidget):
         # Libera la cámara antes de cambiar de ventana
         self.cap.release()
 
+
+        # --- Chequeo de hardware antes del login ---
+        from modules.hardware_checker import mostrar_chequeo_hardware
+        hardware_info = mostrar_chequeo_hardware()
+        
+        # Guarda la info del hardware en la sesión para pasarla a las ventanas de ingreso
+        from modules.sesion import Sesion
+        Sesion.set_hardware_info(hardware_info)
+
+
         # Crea la interfaz administrativa
         self.menu = InterfazAdministrativa()
 

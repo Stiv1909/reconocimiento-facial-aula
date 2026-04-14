@@ -321,32 +321,62 @@ def mostrar_chequeo_hardware():
     """Muestra el diálogo si es necesario o si cambió el hardware."""
 
 
+    # Importa aquí para evitar importación circular
+    from modules.sesion import Sesion
+
+
+    # Verifica que hay una sesión activa (docente logueado)
+    usuario = Sesion.obtener_usuario()
+    if not usuario:
+        # No hay sesión, no mostraremos el chequeo aún
+        return obtener_info_hardware()
+
+
+    # Obtiene el ID único del docente
+    docente_id = str(usuario.get("id", usuario.get("_id", "unknown")))
+
+
     # Detecta el hardware actual del sistema
     actual = obtener_info_hardware()  # Detectar hardware actual
+
 
     # Carga la configuración previamente guardada
     config = cargar_config()          # Cargar config.json
 
 
-    # Primera vez o si cambió el hardware desde el último chequeo
-    if "hardware" not in config or hardware_cambiado(config.get("hardware", {}), actual):
+    # Primera vez: inicializa la estructura por docente
+    if "docentes" not in config:
+        config["docentes"] = {}
+
+
+    # Obtiene la configuración guardada para este docente
+    docente_config = config["docentes"].get(docente_id, {})
+    hardware_guardado = docente_config.get("hardware")
+    mostrar_flag = docente_config.get("mostrar_dialogo", True)
+
+
+    # Verifica si cambió el hardware
+    if hardware_guardado is None or hardware_cambiado(hardware_guardado, actual):
         # Muestra el diálogo de información
         dlg = HardwareDialog(actual)
         dlg.exec()  # Mostrar ventana de información
 
-        # Guarda el hardware detectado y la preferencia de visualización
-        config["hardware"] = actual
-        config["mostrar_dialogo"] = not dlg.chk_no_mostrar.isChecked()
+
+        # Guarda el hardware detectado y la preferencia de visualización para ESTE docente
+        config["docentes"][docente_id] = {
+            "hardware": actual,
+            "mostrar_dialogo": not dlg.chk_no_mostrar.isChecked()
+        }
         guardar_config(config)
         return actual
 
 
-    # Si el usuario no desactivó la visualización, mostrar nuevamente
-    if config.get("mostrar_dialogo", True):
+    # Si el docente no desactivó la visualización, mostrar nuevamente
+    if mostrar_flag:
         # Muestra nuevamente el diálogo
         dlg = HardwareDialog(actual)
         dlg.exec()
-        config["mostrar_dialogo"] = not dlg.chk_no_mostrar.isChecked()
+        config["docentes"][docente_id]["mostrar_dialogo"] = not dlg.chk_no_mostrar.isChecked()
         guardar_config(config)
 
 

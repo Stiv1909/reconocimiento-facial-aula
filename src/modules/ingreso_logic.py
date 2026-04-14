@@ -334,6 +334,30 @@ def asignar_equipo(id_estudiante):
         cursor.execute("SELECT estado FROM equipos WHERE id_equipo = %s", (codigo_equipo,))
         equipo_row = cursor.fetchone()
 
+        # Función para obtener siguiente equipo disponible (no dañado, no ocupado)
+        def obtener_siguiente_disponible(posicion):
+            cursor.execute(
+                "SELECT id_equipo FROM equipos WHERE id_equipo != %s ORDER BY id_equipo ASC",
+                (codigo_equipo,)
+            )
+            for eq in cursor.fetchall():
+                eq_id = eq["id_equipo"]
+                # Verificar que no esté dañado ni ocupado por otro
+                cursor.execute(
+                    "SELECT estado FROM equipos WHERE id_equipo = %s",
+                    (eq_id,)
+                )
+                est = cursor.fetchone()
+                if est and est["estado"] == "disponible":
+                    # Verificar que no esté en uso
+                    cursor.execute(
+                        "SELECT id_matricula FROM historial WHERE id_equipo = %s AND hora_fin IS NULL",
+                        (eq_id,)
+                    )
+                    if not cursor.fetchone():
+                        return eq_id
+            return None
+
         if not equipo_row:
             # Tomar primer equipo disponible
             cursor.execute("SELECT id_equipo FROM equipos WHERE estado = 'disponible' ORDER BY id_equipo ASC LIMIT 1")
@@ -343,13 +367,16 @@ def asignar_equipo(id_estudiante):
             codigo_equipo = r["id_equipo"]
         else:
             estado = equipo_row["estado"]
-            if estado == "ocupado":
-                # Verifica si el equipo ocupado está siendo usado por otra matrícula activa
-                cursor.execute("SELECT id_matricula FROM historial WHERE id_equipo = %s AND hora_fin IS NULL", (codigo_equipo,))
-                occ = cursor.fetchone()
-                if occ and occ["id_matricula"] != matricula:
-                    # Si está ocupado por otro estudiante, busca el primer equipo disponible
-                    cursor.execute("SELECT id_equipo FROM equipos WHERE estado = 'disponible' ORDER BY id_equipo ASC LIMIT 1")
+            if estado in ("ocupado", "dañado"):
+                # Busca siguiente equipo disponible (no dañado, no ocupado)
+                nuevo = obtener_siguiente_disponible(pos)
+                if nuevo:
+                    codigo_equipo = nuevo
+                else:
+                    # Si está ocupado por otro estudiante, buscar disponible
+                    cursor.execute(
+                        "SELECT id_equipo FROM equipos WHERE estado = 'disponible' ORDER BY id_equipo ASC LIMIT 1"
+                    )
                     r = cursor.fetchone()
                     if not r:
                         return None
@@ -410,5 +437,37 @@ def contar_equipos_ocupados():
         return row["total"] if row else 0
     finally:
         # Cierra el cursor y la conexión
+        cursor.close()
+        cerrar_conexion(conexion)
+
+
+# ----------------------------------------------------
+# Obtener estudiantes que ya ingresaron hoy (para mostrar en lista)
+# ----------------------------------------------------
+def get_estudiantes_ingresados_hoy(grado=None):
+    """Retorna lista de ids de estudiantes que ya ingresaron hoy"""
+    conexion = crear_conexion()
+    if not conexion:
+        return []
+
+    cursor = conexion.cursor(pymysql.cursors.DictCursor)
+    try:
+        sql = """
+            SELECT DISTINCT h.id_matricula, e.id_estudiante, e.nombres, e.apellidos
+            FROM historial h
+            INNER JOIN matriculas m ON h.id_matricula = m.id_matricula
+            INNER JOIN estudiantes e ON m.id_estudiante = e.id_estudiante
+            WHERE DATE(h.hora_inicio) = CURDATE()
+        """
+        if grado:
+            sql += " AND m.grado = %s"
+            cursor.execute(sql, (grado,))
+        else:
+            cursor.execute(sql)
+
+        rows = cursor.fetchall()
+        # Retorna lista de dicts con info del estudiante
+        return [{"id": r["id_estudiante"], "nombre": r["nombres"], "apellido": r["apellidos"]} for r in rows]
+    finally:
         cursor.close()
         cerrar_conexion(conexion)

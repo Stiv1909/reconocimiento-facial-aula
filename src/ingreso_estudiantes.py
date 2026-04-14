@@ -8,7 +8,7 @@ import cv2
 # Componentes gráficos de PyQt6
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout,
-    QHBoxLayout, QFrame, QGraphicsDropShadowEffect, QComboBox, QDialog, QMessageBox
+    QHBoxLayout, QFrame, QGraphicsDropShadowEffect, QComboBox, QDialog, QMessageBox, QListWidget
 )
 
 # Clases para manejo de imágenes y colores en PyQt
@@ -23,8 +23,9 @@ import face_recognition
 
 # Importamos la lógica
 from modules.ingreso_logic import cargar_estudiantes, asignar_equipo, contar_equipos_ocupados
+from PyQt6.QtWidgets import QListWidget, QListWidgetItem
 from modules.sesion import Sesion
-from modules.hardware_checker import mostrar_chequeo_hardware
+from modules.hardware_checker import obtener_info_hardware
 
 
 
@@ -85,9 +86,12 @@ class IngresoEstudiantes(QWidget):
         self.last_seen = {}
 
 
-        # --- Chequeo de hardware y capacidad de rostros ---
-        # Obtiene información del hardware para adaptar la cantidad máxima de rostros a procesar
-        self.hardware_info = mostrar_chequeo_hardware()
+        # --- Info de hardware y capacidad de rostros ---
+        # Obtiene info del hardware desde la sesión (configurada en login) o directamente
+        from modules.sesion import Sesion
+        self.hardware_info = Sesion.get_hardware_info()
+        if self.hardware_info is None:
+            self.hardware_info = obtener_info_hardware()
         self.max_faces = self.hardware_info["max_faces"]
 
 
@@ -207,41 +211,39 @@ class IngresoEstudiantes(QWidget):
 
 
         # Mensaje de instrucción para el usuario
-        mensaje = QLabel("Por favor mirar la cámara para el registro")
+        mensaje = QLabel("Reconociendo estudiantes...")
         mensaje.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
 
-        # --- Tarjetas Dinamicas---
-        # Lista que almacenará visualmente las tarjetas de asignación
-        self.cards = []
+        # --- Lista de estudiantes asignados (izquierda) ---
+        self.lista_asignados = QListWidget()
+        self.lista_asignados.setStyleSheet("""
+            QListWidget {
+                background-color: rgba(255,255,255,0.05);
+                border: 2px solid #1565C0;
+                border-radius: 10px;
+                color: white;
+                font-size: 14px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            }
+            QListWidget::item:selected {
+                background-color: rgba(21,101,192,0.5);
+            }
+        """)
 
-        # Lista que almacena los nombres actualmente visibles en cada tarjeta
-        self.nombres_actuales = [None] * self.max_faces  # se adapta dinámicamente
+        # Track nombres ya asignados para evitar duplicados
+        self.nombres_asignados = set()
 
-
-        # Layout horizontal para organizar las tarjetas
-        cards_layout = QHBoxLayout()
-        cards_layout.addStretch()
-
-
-        for i in range(self.max_faces):
-            # Crea una tarjeta por cada rostro máximo soportado por el hardware
-            card = self.crear_tarjeta(f"Asignamiento {i + 1}", "Equipo #---")
-            self.cards.append(card)
-            cards_layout.addWidget(card)
-
-
-        cards_layout.addStretch()
-
-
-        # --- Contador ---
-        # Muestra cuántos equipos están actualmente asignados
-        self.lbl_contador = QLabel("Equipos asignados: 0")
+        # Contador de asignaciones
+        self.lbl_contador = QLabel("Asignados: 0")
         self.lbl_contador.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_contador.setStyleSheet("""
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
-            color: #FFD54F;
+            color: #4CAF50;
         """)
 
 
@@ -290,10 +292,25 @@ class IngresoEstudiantes(QWidget):
         vbox.addWidget(separador)
         vbox.addWidget(titulo)
         vbox.addWidget(mensaje)
-        vbox.addLayout(cards_layout)
-        vbox.addWidget(self.lbl_contador)
-        vbox.addWidget(self.lbl_camara, alignment=Qt.AlignmentFlag.AlignCenter)
-        vbox.addWidget(btn_finalizar, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # Layout horizontal: izquierda=lista, derecha=cámara
+        hbox = QHBoxLayout()
+        
+        # Columna izquierda: lista de asignados + contador
+        izq_layout = QVBoxLayout()
+        izq_layout.addWidget(QLabel("Estudiantes Asignados:"))
+        izq_layout.addWidget(self.lista_asignados)
+        izq_layout.addWidget(self.lbl_contador)
+        
+        # Columna derecha: cámara
+        der_layout = QVBoxLayout()
+        der_layout.addWidget(self.lbl_camara)
+        der_layout.addWidget(btn_finalizar)
+        
+        hbox.addLayout(izq_layout, 1)
+        hbox.addLayout(der_layout, 2)
+        
+        vbox.addLayout(hbox)
 
 
         # Layout raíz de la ventana
@@ -429,39 +446,16 @@ class IngresoEstudiantes(QWidget):
 
 
             # Conjunto de nombres actualmente presentes en cámara
-            present = set(n for n, _ in nombres_en_frame)
-
-
-            # --- Liberar tarjetas cuyos nombres ya no están en cámara ---
-            for i, nombre_tarjeta in enumerate(self.nombres_actuales):
-                if nombre_tarjeta is not None and nombre_tarjeta not in present:
-                    self.nombres_actuales[i] = None  # liberar tarjeta
-                    self.cards[i].lbl_titulo.setText(f"Asignamiento {i + 1}")
-                    self.cards[i].lbl_valor.setText("Equipo #---")
-
-
-            # --- Asignar nuevos rostros ---
+            # --- Agregar estudiantes reconocidos a la lista ---
             for nombre, id_est in nombres_en_frame:
-                if nombre in self.nombres_actuales:
-                    continue  # ya está asignado
-
-
-                if None in self.nombres_actuales:
-                    idx = self.nombres_actuales.index(None)
-                    self.nombres_actuales[idx] = nombre
-
-
-                    # Asignar equipo en BD
-                    equipo = asignar_equipo(id_est)
-
-
-                    self.cards[idx].lbl_titulo.setText(nombre)
-                    self.cards[idx].lbl_valor.setText(f"Equipo: {equipo}")
-
+                if nombre in self.nombres_asignados:
+                    continue
+                self.nombres_asignados.add(nombre)
+                equipo = asignar_equipo(id_est)
+                self.lista_asignados.addItem(f"{nombre} - Equipo: {equipo}")
 
             # --- Actualizar contador ---
-            ocupados = contar_equipos_ocupados()
-            self.lbl_contador.setText(f"Equipos asignados: {ocupados}")
+            self.lbl_contador.setText(f"Asignados: {len(self.nombres_asignados)}")
 
 
     def closeEvent(self, event):

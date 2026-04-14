@@ -2,6 +2,7 @@
 class Sesion:
     # Variable de clase que almacena la información del usuario actual
     _usuario = None
+    _hardware_info = None  # Info del hardware para pasar a ingreso
 
 
     @classmethod
@@ -42,3 +43,19 @@ class Sesion:
         """
         # Comprueba si existe un usuario almacenado en la sesión
         return cls._usuario is not None
+
+
+    @classmethod
+    def set_hardware_info(cls, info: dict):
+        """
+        Guarda la información del hardware para pasarla a las ventanas de ingreso.
+        """
+        cls._hardware_info = info
+
+
+    @classmethod
+    def get_hardware_info(cls):
+        """
+        Retorna la información del hardware guardada en la sesión.
+        """
+        return cls._hardware_info

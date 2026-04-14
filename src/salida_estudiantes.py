@@ -6,7 +6,7 @@ import time
 # Importa componentes gráficos principales de PyQt6
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout,
-    QHBoxLayout, QFrame, QGraphicsDropShadowEffect, QMessageBox, QDialog, QComboBox
+    QHBoxLayout, QFrame, QGraphicsDropShadowEffect, QMessageBox, QDialog, QComboBox, QListWidget, QListWidgetItem
 )
 
 # Importa clases para imágenes y colores
@@ -30,7 +30,7 @@ from modules.salida_logic import (
     estudiantes_pendientes,
     registrar_asistencia
 )
-from modules.hardware_checker import mostrar_chequeo_hardware
+from modules.hardware_checker import obtener_info_hardware
 from modules.conexion import crear_conexion, cerrar_conexion
 
 
@@ -155,7 +155,12 @@ class SalidaEstudiantes(QWidget):
 
         # Hardware info
         # Obtiene información del hardware y la capacidad máxima de rostros simultáneos
-        self.hardware_info = mostrar_chequeo_hardware()
+        # Obtiene info del hardware desde la sesión (configurada en login)
+        from modules.sesion import Sesion
+        self.hardware_info = Sesion.get_hardware_info()
+        if self.hardware_info is None:
+            # Fallback: obtener directamente si no hay sesión
+            self.hardware_info = obtener_info_hardware()
         self.max_faces = self.hardware_info["max_faces"]
 
 
@@ -262,22 +267,25 @@ class SalidaEstudiantes(QWidget):
         mensaje.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
 
-        # Tarjetas
-        # Lista de tarjetas dinámicas donde se mostrará la salida de cada estudiante
-        self.cards = []
-        self.nombres_actuales = [None] * self.max_faces
-        cards_layout = QHBoxLayout()
-        cards_layout.addStretch()
-
-        for i in range(self.max_faces):
-            card = self.crear_tarjeta(f"Salida {i + 1}", "Esperando rostro...")
-            self.cards.append(card)
-            cards_layout.addWidget(card)
-        cards_layout.addStretch()
-
+        # Lista de estudiantes que han salido
+        self.lista_salidas = QListWidget()
+        self.lista_salidas.setStyleSheet("""
+            QListWidget {
+                background-color: rgba(255,255,255,0.05);
+                border: 2px solid #4CAF50;
+                border-radius: 10px;
+                color: white;
+                font-size: 14px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            }
+        """)
+        self.nombres_salidos = set()
 
         # Etiqueta que muestra cuántos equipos siguen ocupados
-        self.lbl_contador = QLabel(f"Equipos ocupados: {contar_equipos_ocupados()}")
+        self.lbl_contador = QLabel("Salidos: 0")
         self.lbl_contador.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_contador.setStyleSheet("font-size: 18px; font-weight: bold; color: #FFD54F;")
 
@@ -314,7 +322,7 @@ class SalidaEstudiantes(QWidget):
         vbox.addWidget(separador)
         vbox.addWidget(titulo)
         vbox.addWidget(mensaje)
-        vbox.addLayout(cards_layout)
+        
         vbox.addWidget(self.lbl_contador)
         vbox.addWidget(self.lbl_camara, alignment=Qt.AlignmentFlag.AlignCenter)
         vbox.addWidget(self.btn_finalizar, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -386,21 +394,21 @@ class SalidaEstudiantes(QWidget):
 
         # Reinicia el estado interno para comenzar un nuevo proceso de salida
         self.estudiantes_conocidos = estudiantes
-        self.nombres_actuales = [None] * self.max_faces
         self.detectados_recientes.clear()
         self.asistencias_registradas = False
 
+        # Limpiar lista y mostrar estudiantes pendientes
+        self.lista_salidas.clear()
+        
+        # Mostrar cada estudiante con equipo ocupado
+        for est in estudiantes:
+            self.lista_salidas.addItem(f"{est['nombre']} - Pendiente")
 
-        # Reinicia visualmente todas las tarjetas
-        for i, card in enumerate(self.cards):
-            card.lbl_titulo.setText(f"Salida {i + 1}")
-            card.lbl_valor.setText("Esperando rostro...")
-
-
-        # Actualiza el contador de equipos ocupados
-        self.lbl_contador.setText(f"Equipos ocupados: {contar_equipos_ocupados()}")
+        # Contador
+        pendientes = len(estudiantes)
+        self.lbl_contador.setText(f"Pendientes: {pendientes}")
         self.update_buttons_state()
-        QMessageBox.information(self, "Listo", f"Grado {grado} cargado. Puede comenzar a escanear.")
+        QMessageBox.information(self, "Listo", f"Grado {grado} cargado. Hay {pendientes} estudiantes. Escanee para registrar salida.")
 
 
     def update_buttons_state(self):
@@ -446,42 +454,32 @@ class SalidaEstudiantes(QWidget):
         present = set(e["nombre"] for e in encontrados)
 
 
-        # Libera las tarjetas cuyos nombres ya no están presentes en cámara
-        for i, nombre_tarjeta in enumerate(self.nombres_actuales):
-            if nombre_tarjeta is not None and nombre_tarjeta not in present:
-                self.nombres_actuales[i] = None
-                self.cards[i].lbl_titulo.setText(f"Salida {i + 1}")
-                self.cards[i].lbl_valor.setText("Esperando rostro...")
-
-
         # Procesa cada estudiante reconocido
         for estudiante in encontrados:
             nombre = estudiante["nombre"]
             id_est = estudiante["id"]
 
-
             # Evita registrar dos veces el mismo estudiante
-            if nombre in self.detectados_recientes or nombre in self.nombres_actuales:
+            if nombre in self.detectados_recientes:
                 continue
 
+            equipo = registrar_salida(id_est)
+            if equipo:
+                self.detectados_recientes.add(nombre)
+                
+                # Buscar y actualizar el item en la lista
+                for i in range(self.lista_salidas.count()):
+                    item = self.lista_salidas.item(i)
+                    if item and nombre in item.text():
+                        item.setText(f"{nombre} - Equipo: {equipo}")
+                        break
+                
+                pendientes = self.lista_salidas.count() - len(self.detectados_recientes)
+                self.lbl_contador.setText(f"Pendientes: {pendientes}")
+                self.update_buttons_state()
 
-            # Si existe una tarjeta libre, registra la salida
-            if None in self.nombres_actuales:
-                idx = self.nombres_actuales.index(None)
-                equipo = registrar_salida(id_est)
-                if equipo:
-                    self.nombres_actuales[idx] = nombre
-                    self.cards[idx].lbl_titulo.setText(nombre)
-                    self.cards[idx].lbl_valor.setText(f"Equipo liberado: {equipo}")
-                    self.detectados_recientes.add(nombre)
-                    self.lbl_contador.setText(f"Equipos ocupados: {contar_equipos_ocupados()}")
-                    self.update_buttons_state()
 
-                    # Elimina al estudiante que ya salió de la lista de pendientes por reconocer
-                    self.estudiantes_conocidos = [e for e in self.estudiantes_conocidos if e["id"] != id_est]
-
-
-        # Si ya no quedan equipos ocupados y aún no se registra la asistencia, la registra
+        # Si ya no y aún no se registra la asistencia, la registra
         if contar_equipos_ocupados() == 0 and not self.asistencias_registradas:
             try:
                 registrar_asistencia(self.selected_grade)
