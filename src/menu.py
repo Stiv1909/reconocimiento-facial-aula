@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QIcon, QPixmap, QColor, QPainter, QBrush, QLinearGradient, QPainterPath, QImage
 
 # Importación de clases base para alineación, tamaños y animaciones
-from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, pyqtProperty
+from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, pyqtProperty, QParallelAnimationGroup
 
 
 # Importa la sesión del usuario autenticado
@@ -25,6 +25,8 @@ from gestion_equipos import GestionEquipos
 from registro_docente import RegistroDocente
 from registro_estudiante import RegistroEstudiantes
 from historial_accesos import HistorialAccesos
+from historial_danos import HistorialDanños
+from historial_equipos import HistorialEquipos
 from registrar_incidente import RegistrarIncidente
 from reporte import ReporteAsistencias
 
@@ -360,6 +362,13 @@ class InterfazAdministrativa(QWidget):
 
 
     def init_ui(self):
+        # Limpiar layout existente si lo hay para evitar duplicates
+        if self.layout() is not None:
+            while self.layout().count():
+                item = self.layout().takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+        
         # Aplica estilos visuales generales a la ventana
         self.setStyleSheet("""
             QWidget { background-color: #0D1B2A; color: white; font-family: Arial; font-size: 14px; }
@@ -431,19 +440,58 @@ class InterfazAdministrativa(QWidget):
         # Botón para cerrar sesión y volver al login
         btn_sesion = QPushButton("CERRAR SESIÓN")
         btn_sesion.setObjectName("btnSesion")
-        btn_sesion.clicked.connect(self.cerrar_sesion)
+        btn_sesion.clicked.connect(self._cerrar_sesion_wrapper)
 
         # Botón para cerrar completamente la aplicación
         btn_info = QPushButton("CERRAR PROGRAMA")
         btn_info.setObjectName("btnInfo")
         btn_info.clicked.connect(QApplication.quit)
 
+        # --- Detección robusto de administrador (ANTES de usar es_admin) ---
+        es_admin = False
+        u = self.usuario or {}
+        if "es_admin" in u and u["es_admin"] is not None:
+            try:
+                es_admin = bool(int(u["es_admin"]))
+            except Exception:
+                es_admin = bool(u["es_admin"])
+        elif "rol" in u and u["rol"] is not None:
+            try:
+                es_admin = str(u["rol"]).lower() == "admin"
+            except Exception:
+                es_admin = False
+        else:
+            es_admin = False
+
+        # Botón simple para cambiar menú
+        self.btn_menu = QPushButton("🔄 Cambiar Menú")
+        self.btn_menu.setObjectName("btnMenu")
+        self.btn_menu.setFixedHeight(40)
+        
+        # Estilo simple
+        self.btn_menu.setStyleSheet("""
+            QPushButton#btnMenu {
+                background-color: #7B1FA2;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 14px;
+                color: white;
+            }
+            QPushButton#btnMenu:hover {
+                background-color: #9C27B0;
+            }
+        """)
+        self.btn_menu.clicked.connect(self.cambiar_menu)
+        
+        # Pestañas ya configuradas arriba
 
         # Layout horizontal del encabezado
         header_layout = QHBoxLayout()
         header_layout.addWidget(logo)
         header_layout.addLayout(texto_layout)
         header_layout.addStretch()
+        header_layout.addWidget(self.btn_menu)
         header_layout.addWidget(btn_sesion)
         header_layout.addWidget(btn_info)
 
@@ -472,65 +520,53 @@ class InterfazAdministrativa(QWidget):
 
 
         # --- Botones ---
-        # Lista de acciones disponibles, cada una con ícono, texto y color asociado
-        acciones = [
+        # Menú DOCENTE: funciones de consulta y registro de uso (sin modificar datos)
+        acciones_docente = [
             ("src/icons/ingreso.png", "Ingreso Estudiantes", "#2E7D32"),
             ("src/icons/salida.png", "Salida Estudiantes", "#2E7D32"),
+            ("src/icons/listar.png", "Historial de Accesos", "#EF6C00"),
+            ("src/icons/incidente.png", "Historial de Daños", "#C62828"),
+            ("src/icons/equipos.png", "Historial de Equipos", "#1565C0"),
+            ("src/icons/incidente.png", "Registrar Incidente", "#C62828"),
+            ("src/icons/asis.png", "Generación de Asistencia", "#2E7D32"),
+        ]
+        
+        # Menú ADMINISTRATIVO: solo funciones exclusivas de admin (sin repetidos del docente)
+        acciones_admin = [
             ("src/icons/editar_est.png", "Editar Estudiantes", "#2E7D32"),
             ("src/icons/estudiante.png", "Registrar Estudiantes", "#2E7D32"),
-            ("src/icons/asis.png", "Generación de Asistencia", "#2E7D32"),
             ("src/icons/docente.png", "Registrar Docente", "#1565C0"),
             ("src/icons/equipos.png", "Gestionar Equipos", "#EF6C00"),
-            ("src/icons/listar.png", "Historial de Accesos", "#EF6C00"),
-            ("src/icons/incidente.png", "Registrar Incidente", "#C62828")
         ]
+        
+        # Determinar qué acciones mostrar según el tipo de menú
+        menu_tipo = Sesion.get_menu_tipo()
+        if menu_tipo == "administrativo" and es_admin:
+            acciones = acciones_admin
+        else:
+            acciones = acciones_docente
 
+        # Guardar listas para cambio de menú
+        self.acciones_docente = acciones_docente
+        self.acciones_admin = acciones_admin
+        self.es_admin = es_admin
 
-        # Grid donde se organizarán las tarjetas de acciones
+        # Crear grid para botones
         grid = QGridLayout()
         grid.setSpacing(25)
-
-
-        # --- Detección robusta de administrador ---
-        # soporta: 'es_admin' (0/1, int or str), 'rol' ("admin"/"docente"), o ausencia
-        es_admin = False
-        u = self.usuario or {}
-
-        # Evalúa primero si existe la clave es_admin
-        if "es_admin" in u and u["es_admin"] is not None:
-            try:
-                es_admin = bool(int(u["es_admin"]))
-            except Exception:
-                es_admin = bool(u["es_admin"])
-
-        # Si no existe es_admin, intenta deducirlo desde el rol
-        elif "rol" in u and u["rol"] is not None:
-            try:
-                es_admin = str(u["rol"]).lower() == "admin"
-            except Exception:
-                es_admin = False
-        else:
-            # no info — asumimos no admin (seguro por defecto)
-            es_admin = False
-
-
-        # organize visible buttons only (omit disabled ones), laying out into grid
+        
+        # Llenar el grid con botones
         row, col = 0, 0
         max_cols = 5
-
-
         for icono, texto, color in acciones:
-            # acciones protegidas
-            if texto in ["Editar Estudiantes", "Registrar Estudiantes", "Registrar Docente", "Gestionar Equipos"]:
+            # Botones protegidos
+            if texto in ["Editar Estudiantes", "Registrar Estudiantes", "Registrar Docente", "Gestionar Equipos", "Historial de Daños", "Historial de Equipos"]:
                 if not es_admin:
-                    # no incluimos el botón si no es admin
                     continue
-
-
-            # Crea el botón visual de tipo tarjeta
+            
             btn = BotonTarjetaAvanzado(icono, texto, color)
-
-            # Conecta cada botón con su método correspondiente
+            
+            # Conecta cada botón con su método
             if texto == "Ingreso Estudiantes":
                 btn.clicked.connect(self.abrir_ingreso_estudiantes)
             elif texto == "Salida Estudiantes":
@@ -545,23 +581,22 @@ class InterfazAdministrativa(QWidget):
                 btn.clicked.connect(self.abrir_registrar_estudiantes)
             elif texto == "Historial de Accesos":
                 btn.clicked.connect(self.abrir_historial_accesos)
+            elif texto == "Historial de Daños":
+                btn.clicked.connect(self.abrir_historial_danos)
+            elif texto == "Historial de Equipos":
+                btn.clicked.connect(self.abrir_historial_equipos)
             elif texto == "Registrar Incidente":
                 btn.clicked.connect(self.abrir_registrar_incidente)
             elif texto == "Generación de Asistencia":
                 btn.clicked.connect(self.abrir_reporte_asistencias)
-
-
-
-            # Inserta el botón en la cuadrícula
+            
             grid.addWidget(btn, row, col)
             col += 1
             if col >= max_cols:
                 col = 0
                 row += 1
 
-
         # --- Layout principal ---
-        # Construye el layout principal de la ventana
         main_layout = QVBoxLayout()
         main_layout.addLayout(header_layout)
         main_layout.addWidget(separador)
@@ -572,8 +607,6 @@ class InterfazAdministrativa(QWidget):
         main_layout.addLayout(grid)
         main_layout.addStretch()
 
-
-        # Asigna el layout principal a la ventana
         self.setLayout(main_layout)
 
 
@@ -679,7 +712,19 @@ class InterfazAdministrativa(QWidget):
         self.ventana_historial = HistorialAccesos()
         self.ventana_historial.showMaximized()
         self.close()
-    
+
+    def abrir_historial_danos(self):
+        # Abre la ventana de historial de daños
+        self.ventana_danos = HistorialDanños()
+        self.ventana_danos.showMaximized()
+        self.close()
+
+    def abrir_historial_equipos(self):
+        # Abre la ventana de historial de equipos
+        self.ventana_equipos = HistorialEquipos()
+        self.ventana_equipos.showMaximized()
+        self.close()
+
     def abrir_registrar_incidente(self):
         # Abre la ventana para registrar incidentes
         self.ventana_incidente = RegistrarIncidente()
@@ -693,13 +738,35 @@ class InterfazAdministrativa(QWidget):
         self.close()
 
 
+    # --- Wrapper para cerrar sesión ---
+    def _cerrar_sesion_wrapper(self):
+        self.cerrar_sesion()
+
+
+    # --- Cambiar tipo de menú ---
+    def cambiar_menu(self):
+        # Cambiar el tipo de menú
+        menu_actual = Sesion.get_menu_tipo()
+        if menu_actual == "docente":
+            Sesion.set_menu_tipo("administrativo")
+        else:
+            Sesion.set_menu_tipo("docente")
+        
+        # Abrir nueva ventana y cerrar esta
+        from menu import InterfazAdministrativa
+        self.nueva_menu = InterfazAdministrativa()
+        self.nueva_menu.showMaximized()
+        self.close()
+
+
     # --- Cerrar sesión ---
     def cerrar_sesion(self):
         # Importa la ventana de login en el momento de cerrar sesión
         from login import InicioSesionDocente
 
-        # Limpia la sesión actual
+        # Limpia la sesión actual y resetear tipo de menú
         Sesion.cerrar_sesion()
+        Sesion.set_menu_tipo("docente")
 
         # Crea nuevamente la ventana de inicio de sesión
         self.login = InicioSesionDocente()
@@ -707,7 +774,6 @@ class InterfazAdministrativa(QWidget):
 
         # Cierra la ventana actual del menú
         self.close()
-
 
 
 if __name__ == "__main__":

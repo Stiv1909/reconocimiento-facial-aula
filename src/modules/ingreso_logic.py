@@ -367,7 +367,7 @@ def asignar_equipo(id_estudiante):
             codigo_equipo = r["id_equipo"]
         else:
             estado = equipo_row["estado"]
-            if estado in ("ocupado", "dañado"):
+            if estado in ("ocupado", "dañado", "otro"):
                 # Busca siguiente equipo disponible (no dañado, no ocupado)
                 nuevo = obtener_siguiente_disponible(pos)
                 if nuevo:

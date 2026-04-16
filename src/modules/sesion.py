@@ -3,6 +3,7 @@ class Sesion:
     # Variable de clase que almacena la información del usuario actual
     _usuario = None
     _hardware_info = None  # Info del hardware para pasar a ingreso
+    _menu_tipo = "docente"  # Tipo de menu actual: "docente" o "administrativo"
 
 
     @classmethod
@@ -59,3 +60,42 @@ class Sesion:
         Retorna la información del hardware guardada en la sesión.
         """
         return cls._hardware_info
+
+
+    @classmethod
+    def obtener_cedula(cls):
+        """
+        Retorna la cédula del usuario actual.
+        """
+        return cls._usuario.get("cedula", "") if cls._usuario else ""
+
+
+    @classmethod
+    def es_admin(cls):
+        """
+        Retorna True si el usuario actual es administrador.
+        """
+        if not cls._usuario:
+            return False
+        u = cls._usuario
+        if "es_admin" in u and u["es_admin"]:
+            return bool(u["es_admin"])
+        if "rol" in u and u["rol"]:
+            return str(u["rol"]).lower() == "admin"
+        return False
+
+
+    @classmethod
+    def set_menu_tipo(cls, tipo):
+        """
+        Cambia el tipo de menu actual (docente o administrativo).
+        """
+        cls._menu_tipo = tipo
+
+
+    @classmethod
+    def get_menu_tipo(cls):
+        """
+        Retorna el tipo de menu actual.
+        """
+        return cls._menu_tipo
